@@ -4,7 +4,6 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 // Middlewares
 app.use(cors());
@@ -130,7 +129,7 @@ app.post('/api/account-value-batch', async (req, res) => {
     }
 });
 
-// 6. ROTA DE IA (STEAM_BB)
+// 6. ROTA DE IA (STEAM_BB via GROQ)
 app.post('/api/chat', async (req, res) => {
     try {
         const { messages, contextGames } = req.body;
@@ -141,28 +140,39 @@ app.post('/api/chat', async (req, res) => {
 
         const systemPrompt = {
             role: 'system',
-            content: `Você é a "SteamBB", uma IA não-oficial rodando num terminal Cyberpunk Dark Neo-Brutalista. 
+            content: `Você é a "SteamBB" (uma homenagem ao banco de dados SteamDB), uma IA não-oficial rodando num terminal Cyberpunk Dark Neo-Brutalista. 
             Sua personalidade é ríspida, sarcástica, ácida e você é uma especialista veterana em jogos da Steam. 
             NUNCA seja educada demais. NUNCA use frases clichês como "Olá, como posso ajudar?". 
             Vá direto ao ponto com respostas curtas e impactantes. Fale sempre em português do Brasil.
             Contexto da biblioteca completa deste usuário: ${contextGames || 'Nenhum perfil carregado.'}`
         };
 
-        const ollamaMessages = [systemPrompt, ...messages];
+        const aiMessages = [systemPrompt, ...messages];
 
-        const ollamaResponse = await axios.post('http://localhost:11434/api/chat', {
-            model: 'llama3',
-            messages: ollamaMessages,
-            stream: false
+        // Faz a chamada diretamente para a API super-rápida do Groq
+        const groqResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+            model: 'llama-3.1-8b-instant', // <--- Mude para este modelo atualizado
+            messages: aiMessages,
+            temperature: 0.7,
+            max_tokens: 1024
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
         });
 
-        res.json({ reply: ollamaResponse.data.message.content });
+        // Retorna a resposta extraída do Groq
+        res.json({ reply: groqResponse.data.choices[0].message.content });
+
     } catch (error) {
-        console.error('Erro na IA Local:', error.message);
-        res.status(500).json({ error: 'Erro ao conectar com o Ollama.' });
+        console.error('Erro na IA do Groq:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: 'Erro ao conectar com o cérebro da SteamBB na nuvem.' });
     }
 });
 
+const PORT = process.env.PORT || 3001;
+
 app.listen(PORT, () => {
-    console.log(`Servidor a correr na porta ${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });

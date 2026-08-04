@@ -76,4 +76,4 @@ node_modules/
 .env
 dist/
 
-### Criado com muito sarcasmo, café e código brutalista. ###
+### Criado com muito sarcasmo, café e código. ###

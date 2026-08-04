@@ -312,9 +312,23 @@ function App() {
         <div className="flex-1 w-full flex flex-col gap-8">
           
           <div className="bg-zinc-900 border-4 border-zinc-200 p-6 md:p-8 shadow-[8px_8px_0px_0px_#a3e635] w-full transition-all">
-            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-6 bg-lime-400 text-zinc-950 border-4 border-zinc-200 py-3 px-6 shadow-[4px_4px_0px_0px_#e4e4e7] inline-block">
-              STEAM // DASH
-            </h1>
+            
+            {/* NOVO CABEÇALHO COM O BOTÃO DE CAFÉ */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter bg-lime-400 text-zinc-950 border-4 border-zinc-200 py-3 px-6 shadow-[4px_4px_0px_0px_#e4e4e7] inline-block">
+                STEAM // DASH
+              </h1>
+              
+              {/* BOTÃO DO CAFÉ */}
+              <a 
+                href="https://ko-fi.com/orenansilva" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="bg-amber-400 hover:bg-amber-500 text-zinc-950 font-black uppercase py-3 px-6 border-4 border-zinc-200 shadow-[4px_4px_0px_0px_#e4e4e7] hover:translate-x-1 hover:translate-y-1 hover:shadow-[0px_0px_0px_0px_#e4e4e7] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all cursor-pointer text-sm md:text-base flex items-center gap-3"
+              >
+                <span className="text-xl">☕</span> ME PAGUE UM CAFÉ
+              </a>
+            </div>
             
             <form onSubmit={buscarDados} className="flex flex-col sm:flex-row gap-4">
               <input
