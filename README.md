@@ -71,7 +71,7 @@ npm run dev
 ### Segurança da Aplicação
 NUNCA compartilhe o seu arquivo .env na nuvem. Para garantir a segurança, o projeto está devidamente blindado com um arquivo .gitignore configurado na raiz para evitar vazamentos da STEAM_API_KEY para o GitHub.
 
-# Exemplo do .gitignore
+### Exemplo do .gitignore
 node_modules/
 .env
 dist/
