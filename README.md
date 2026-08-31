@@ -39,33 +39,33 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 2.  Uma [Steam API Key](https://steamcommunity.com/dev/apikey) (Chave de Desenvolvedor).
 3.  [Ollama](https://ollama.com/) instalado no seu computador.
 
-### 1. Configurar o Motor de IA (SteamBB)
+## 1. Configurar o Motor de IA (SteamBB)
 Abra o seu terminal e baixe o cérebro da IA para a sua máquina:
 ollama run llama3
 
 (Mantenha o Ollama rodando em segundo plano na porta 11434)
 
-### 2. Configurar o Back-end
+## 2. Configurar o Back-end
 Navegue até a pasta do servidor e instale as dependências necessárias:
 
-# Na pasta do backend
+### Na pasta do backend
 npm install express axios cors dotenv
 
-# Crie um arquivo .env na raiz do backend e adicione a sua chave da Steam:
+### Crie um arquivo .env na raiz do backend e adicione a sua chave da Steam:
 STEAM_API_KEY=COLE_AQUI_A_SUA_CHAVE_DA_STEAM
 PORT=3001
 
-# Inicie o servidor Node:
+### Inicie o servidor Node:
 node server.js
 
-### 3. Configurar o Front-end
+## 3. Configurar o Front-end
 Navegue até a pasta do frontend e instale as bibliotecas:
 
-# Na pasta do frontend
+### Na pasta do frontend
 npm install
 npm install styled-components axios
 
-# Inicie a aplicação React/Vite:
+### Inicie a aplicação React/Vite:
 npm run dev
 
 ### Segurança da Aplicação
