@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: steam-backend
+    runtime: node
+    plan: free
+    rootDir: steam-backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: STEAM_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

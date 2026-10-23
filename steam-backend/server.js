@@ -6,10 +6,27 @@ const cors = require('cors');
 const app = express();
 
 // Middlewares
-app.use(cors());
-app.use(express.json()); 
+// Em produção, defina FRONTEND_URL (ex: https://steambb.vercel.app) para liberar só o seu site.
+// Aceita vários endereços separados por vírgula. Sem a variável, libera qualquer origem (modo dev).
+const allowedOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
+    : '*';
+app.use(cors({ origin: allowedOrigins }));
+app.use(express.json({ limit: '1mb' }));
 
 const API_KEY = process.env.STEAM_API_KEY;
+
+// Modelo da IA no Groq. Configurável porque o Groq aposenta modelos com frequência
+// (o llama-3.1-8b-instant foi removido). Lista atual: https://console.groq.com/docs/models
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+
+// Limites para não estourar a cota grátis do Groq (8.000 tokens/minuto)
+const MAX_CONTEXT_CHARS = 6000;
+const MAX_HISTORY_MESSAGES = 12;
+
+// SteamID64 tem sempre 17 dígitos; appId é numérico. Evita repassar lixo para a URL da Steam.
+const isValidSteamId = (id) => /^\d{17}$/.test(id);
+const isValidAppId = (id) => /^\d+$/.test(id);
 
 // 1. Rota de Status
 app.get('/api/status', (req, res) => {
@@ -20,6 +37,9 @@ app.get('/api/status', (req, res) => {
 app.get('/api/profile/:steamId', async (req, res) => {
     try {
         const { steamId } = req.params;
+        if (!isValidSteamId(steamId)) {
+            return res.status(400).json({ error: 'SteamID64 inválido. Ele deve ter 17 dígitos (ex: 76561197960435530).' });
+        }
         const url = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${API_KEY}&steamids=${steamId}`;
         const response = await axios.get(url);
         const players = response.data.response.players;
@@ -38,6 +58,9 @@ app.get('/api/profile/:steamId', async (req, res) => {
 app.get('/api/games/:steamId', async (req, res) => {
     try {
         const { steamId } = req.params;
+        if (!isValidSteamId(steamId)) {
+            return res.status(400).json({ error: 'SteamID64 inválido.' });
+        }
         const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${API_KEY}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true&format=json`;
         const response = await axios.get(url);
         res.json(response.data.response);
@@ -51,12 +74,15 @@ app.get('/api/games/:steamId', async (req, res) => {
 app.get('/api/achievements/:steamId/:appId', async (req, res) => {
     try {
         const { steamId, appId } = req.params;
-        
+        if (!isValidSteamId(steamId) || !isValidAppId(appId)) {
+            return res.status(400).json({ error: 'SteamID64 ou appId inválido.' });
+        }
+
         const statsUrl = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${appId}&key=${API_KEY}&steamid=${steamId}`;
         const statsResponse = await axios.get(statsUrl);
         const playerStats = statsResponse.data.playerstats.achievements || [];
 
-        const schemaUrl = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v0002/?key=${API_KEY}&appid=${appId}&l=portuguese`;
+        const schemaUrl = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v0002/?key=${API_KEY}&appid=${appId}&l=brazilian`;
         const schemaResponse = await axios.get(schemaUrl);
         const schemaAchievements = schemaResponse.data.game.availableGameStats?.achievements || [];
 
@@ -93,7 +119,7 @@ app.post('/api/account-value-batch', async (req, res) => {
             // Tenta até 3 vezes se a Steam bloquear o IP temporariamente
             while (!success && retries < 3) {
                 try {
-                    const storeUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=br&l=portuguese`;
+                    const storeUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=br&l=brazilian`;
                     const storeResponse = await axios.get(storeUrl);
                     
                     const gameData = storeResponse.data && storeResponse.data[appId];
@@ -144,17 +170,25 @@ app.post('/api/chat', async (req, res) => {
             Sua personalidade é ríspida, sarcástica, ácida e você é uma especialista veterana em jogos da Steam. 
             NUNCA seja educada demais. NUNCA use frases clichês como "Olá, como posso ajudar?". 
             Vá direto ao ponto com respostas curtas e impactantes. Fale sempre em português do Brasil.
-            Contexto da biblioteca completa deste usuário: ${contextGames || 'Nenhum perfil carregado.'}`
+            Contexto da biblioteca deste usuário: ${String(contextGames || 'Nenhum perfil carregado.').slice(0, MAX_CONTEXT_CHARS)}`
         };
 
-        const aiMessages = [systemPrompt, ...messages];
+        // Só aceita papéis user/assistant vindos do navegador e manda apenas as últimas mensagens,
+        // senão o histórico cresce a cada pergunta até estourar o limite de tokens do Groq
+        const history = messages
+            .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string')
+            .slice(-MAX_HISTORY_MESSAGES);
+
+        const aiMessages = [systemPrompt, ...history];
 
         // Faz a chamada diretamente para a API super-rápida do Groq
         const groqResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-            model: 'llama-3.1-8b-instant', // <--- Mude para este modelo atualizado
+            model: GROQ_MODEL,
             messages: aiMessages,
             temperature: 0.7,
-            max_tokens: 1024
+            max_tokens: 1024,
+            // Os modelos gpt-oss "pensam" antes de responder; esforço baixo = resposta rápida
+            ...(GROQ_MODEL.startsWith('openai/gpt-oss') && { reasoning_effort: 'low' })
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
@@ -167,12 +201,30 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (error) {
         console.error('Erro na IA do Groq:', error.response ? error.response.data : error.message);
-        res.status(500).json({ error: 'Erro ao conectar com o cérebro da SteamBB na nuvem.' });
+        const status = error.response?.status;
+        if (status === 429 || status === 413) {
+            return res.status(429).json({ error: 'A STEAM_BB ESTÁ SOBRECARREGADA (LIMITE DO GROQ). ESPERE UM MINUTO E TENTE DE NOVO.' });
+        }
+        res.status(500).json({ error: 'ERRO: CONEXÃO COM O CÉREBRO DA STEAM_BB PERDIDA.' });
     }
+});
+
+// JSON malformado no corpo da requisição: responde em JSON em vez de vazar o stack trace do servidor
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'JSON inválido.' });
+    }
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'Requisição grande demais.' });
+    }
+    console.error('Erro inesperado:', err.message);
+    res.status(500).json({ error: 'Erro interno no servidor.' });
 });
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
+// No Express 5, erros ao abrir a porta (ex: porta já em uso) chegam neste callback
+app.listen(PORT, (error) => {
+    if (error) throw error;
     console.log(`Servidor rodando na porta ${PORT}`);
 });

@@ -2,6 +2,35 @@ import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import Loader from './components/Loader';
 
+// URL do backend: em produção vem da variável VITE_API_URL (definida na Vercel)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+const formatarHoras = (minutos) => `${(minutos / 60).toFixed(1)}h`;
+
+// Resumo da biblioteca enviado para a IA. Mandar a lista inteira estoura o limite grátis
+// do Groq (8.000 tokens/min) em bibliotecas com mais de ~400 jogos.
+const montarContexto = (games) => {
+  if (games.length === 0) return '';
+
+  const porHoras = [...games].sort((a, b) => b.playtime_forever - a.playtime_forever);
+  const nuncaJogados = porHoras.filter(g => g.playtime_forever === 0);
+  const totalMinutos = games.reduce((soma, g) => soma + g.playtime_forever, 0);
+
+  const maisJogados = porHoras
+    .filter(g => g.playtime_forever > 0)
+    .slice(0, 40)
+    .map(g => `${g.name} (${formatarHoras(g.playtime_forever)})`)
+    .join(', ');
+  const amostraNuncaJogados = nuncaJogados.slice(0, 20).map(g => g.name).join(', ');
+
+  return `Total: ${games.length} jogos, ${formatarHoras(totalMinutos)} jogadas no total, ${nuncaJogados.length} jogos NUNCA abertos.
+  Mais jogados: ${maisJogados || 'nenhum'}.
+  Alguns que ele comprou e nunca abriu: ${amostraNuncaJogados || 'nenhum'}.`;
+};
+
+// Mensagem de erro vinda do backend (ex: limite do Groq) ou uma genérica
+const erroDaIA = (err) => err.response?.data?.error || 'ERRO: CONEXÃO COM O CÉREBRO DA STEAM_BB PERDIDA.';
+
 function App() {
   const [steamId, setSteamId] = useState('');
   const [profile, setProfile] = useState(null);
@@ -44,14 +73,21 @@ function App() {
     setProgressPercent(0);
 
     try {
-      const profileResponse = await axios.get(`http://localhost:3001/api/profile/${steamId}`);
+      const profileResponse = await axios.get(`${API_URL}/api/profile/${steamId}`);
       setProfile(profileResponse.data);
 
-      const gamesResponse = await axios.get(`http://localhost:3001/api/games/${steamId}`);
-      setGames(gamesResponse.data.games || []); 
+      const gamesResponse = await axios.get(`${API_URL}/api/games/${steamId}`);
+      const listaDeJogos = gamesResponse.data.games || [];
+      setGames(listaDeJogos);
+      // Perfil público com biblioteca privada: a Steam responde sem a lista de jogos
+      if (listaDeJogos.length === 0) {
+        setError('AVISO: Biblioteca vazia ou privada. Em Steam > Privacidade, deixe "Detalhes do jogo" como Público.');
+      }
     } catch (err) {
       console.error(err);
-      setError('ERRO: Falha ao buscar dados. Verifique o SteamID e se o perfil é público.');
+      setError(err.response?.status === 400
+        ? `ERRO: ${err.response.data.error}`
+        : 'ERRO: Falha ao buscar dados. Verifique o SteamID e se o perfil é público.');
     } finally {
       setLoading(false);
     }
@@ -80,7 +116,7 @@ function App() {
 
         setProgressPercent(percent);
 
-        const response = await axios.post('http://localhost:3001/api/account-value-batch', {
+        const response = await axios.post(`${API_URL}/api/account-value-batch`, {
           appIds: chunk
         });
 
@@ -112,11 +148,7 @@ function App() {
       const updatedMessages = [...messages, { role: 'user', text: visualMessage }];
       setMessages(updatedMessages);
 
-      let contextStr = '';
-      if (games.length > 0) {
-        const allGames = [...games].sort((a, b) => b.playtime_forever - a.playtime_forever);
-        contextStr = `Lista completa: ${allGames.map(g => `${g.name} (${(g.playtime_forever/60).toFixed(1)}h)`).join(', ')}.`;
-      }
+      const contextStr = montarContexto(games);
 
       const promptOculto = `Você é a SteamBB. O painel acabou de calcular que o utilizador já gastou aproximadamente R$ ${value.toFixed(2).replace('.', ',')} na conta da Steam.
       
@@ -137,14 +169,14 @@ function App() {
         }));
 
       try {
-        const response = await axios.post('http://localhost:3001/api/chat', {
+        const response = await axios.post(`${API_URL}/api/chat`, {
           messages: historyForOllama,
           contextGames: contextStr
         });
         
         setMessages(prev => [...prev, { role: 'ai', text: response.data.reply }]);
       } catch (err) {
-        setMessages(prev => [...prev, { role: 'ai', text: 'ERRO: CONEXÃO COM O CÉREBRO LOCAL DA STEAM_BB PERDIDA.' }]);
+        setMessages(prev => [...prev, { role: 'ai', text: erroDaIA(err) }]);
       } finally {
         setIsChatting(false);
         setTriggerAiValue(null); 
@@ -166,11 +198,7 @@ function App() {
     setChatInput('');
     setIsChatting(true);
 
-    let contextStr = '';
-    if (games.length > 0) {
-      const allGames = [...games].sort((a, b) => b.playtime_forever - a.playtime_forever);
-      contextStr = `Lista completa da biblioteca: ${allGames.map(g => `${g.name} (${(g.playtime_forever/60).toFixed(1)}h)`).join(', ')}.`;
-    }
+    const contextStr = montarContexto(games);
 
     const historyForOllama = updatedMessages
       .filter((msg, index) => index !== 0)
@@ -180,14 +208,14 @@ function App() {
       }));
 
     try {
-      const response = await axios.post('http://localhost:3001/api/chat', {
+      const response = await axios.post(`${API_URL}/api/chat`, {
         messages: historyForOllama,
         contextGames: contextStr
       });
       
       setMessages(prev => [...prev, { role: 'ai', text: response.data.reply }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', text: 'ERRO: CONEXÃO COM O CÉREBRO LOCAL DA STEAM_BB PERDIDA.' }]);
+      setMessages(prev => [...prev, { role: 'ai', text: erroDaIA(err) }]);
     } finally {
       setIsChatting(false);
     }
@@ -202,17 +230,13 @@ function App() {
     setMessages(updatedMessages);
     setIsChatting(true);
 
-    let contextStr = '';
-    if (games.length > 0) {
-      const allGames = [...games].sort((a, b) => b.playtime_forever - a.playtime_forever);
-      contextStr = `Lista completa: ${allGames.map(g => `${g.name} (${(g.playtime_forever/60).toFixed(1)}h)`).join(', ')}.`;
-    }
+    const contextStr = montarContexto(games);
 
     let conquistasPendentesTexto = "Não há conquistas registadas para este jogo na base da Steam ou elas são privadas.";
     let isPlatinado = false;
 
     try {
-      const achResponse = await axios.get(`http://localhost:3001/api/achievements/${steamId}/${game.appid}`);
+      const achResponse = await axios.get(`${API_URL}/api/achievements/${steamId}/${game.appid}`);
       if (achResponse.data && achResponse.data.achievements) {
         const pendentes = achResponse.data.achievements.filter(ach => ach.achieved === 0);
         
@@ -224,14 +248,14 @@ function App() {
           isPlatinado = true;
         }
       }
-    } catch (err) {
+    } catch {
       console.log(`Sem conquistas para ${game.appid}`);
     }
 
     const horasJogadas = (game.playtime_forever / 60).toFixed(1);
-    let contextoHoras = "";
-    let comandoZombaria = "";
-    let instrucaoFinal = "";
+    let contextoHoras;
+    let comandoZombaria;
+    let instrucaoFinal;
 
     if (game.playtime_forever === 0) {
       contextoHoras = `O usuário comprou este jogo mas tem exatas 0.0 horas jogadas. Nunca sequer abriu.`;
@@ -273,14 +297,14 @@ function App() {
       }));
 
     try {
-      const response = await axios.post('http://localhost:3001/api/chat', {
+      const response = await axios.post(`${API_URL}/api/chat`, {
         messages: historyForOllama,
         contextGames: contextStr
       });
       
       setMessages(prev => [...prev, { role: 'ai', text: response.data.reply }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', text: 'ERRO: CONEXÃO COM O CÉREBRO LOCAL DA STEAM_BB PERDIDA.' }]);
+      setMessages(prev => [...prev, { role: 'ai', text: erroDaIA(err) }]);
     } finally {
       setIsChatting(false);
     }
@@ -358,12 +382,12 @@ function App() {
                     alt={`Avatar`}
                     className="w-24 h-24 md:w-32 md:h-32 object-cover border-4 border-zinc-200 shadow-[4px_4px_0px_0px_#e4e4e7]"
                   />
-                  <span className={`absolute -bottom-3 -right-3 w-6 h-6 border-4 border-zinc-200 ${profile.personastate === 1 ? 'bg-lime-400' : 'bg-zinc-500'}`} />
+                  <span className={`absolute -bottom-3 -right-3 w-6 h-6 border-4 border-zinc-200 ${profile.personastate > 0 ? 'bg-lime-400' : 'bg-zinc-500'}`} />
                 </div>
                 <div className="overflow-hidden flex-1">
                   <h2 className="text-3xl md:text-4xl font-black uppercase truncate text-zinc-100">{profile.personaname}</h2>
                   <p className="text-sm md:text-base font-bold mt-2 bg-zinc-800 text-zinc-200 border-2 border-zinc-700 inline-block px-3 py-1">
-                    {profile.personastate === 1 ? 'STATUS: ONLINE' : 'STATUS: OFFLINE'}
+                    {profile.personastate > 0 ? 'STATUS: ONLINE' : 'STATUS: OFFLINE'}
                   </p>
                 </div>
               </div>
@@ -472,7 +496,7 @@ function App() {
               >
                 [ RESET ]
               </button>
-              <span className="text-xs font-bold text-zinc-950 bg-lime-400 px-3 py-1 border-2 border-zinc-950 hidden sm:inline-block">LLAMA_3</span>
+              <span className="text-xs font-bold text-zinc-950 bg-lime-400 px-3 py-1 border-2 border-zinc-950 hidden sm:inline-block">GPT-OSS</span>
             </div>
           </div>
 
