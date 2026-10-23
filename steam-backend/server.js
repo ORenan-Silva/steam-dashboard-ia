@@ -330,7 +330,17 @@ const lerLinhaDoStream = (linha) => {
 
 // 1. Rota de Status (o front chama ao abrir a página para "acordar" o servidor do Render)
 app.get('/api/status', (req, res) => {
-    res.json({ status: 'Servidor a correr com sucesso!', ip: req.ip });
+    res.json({
+        status: 'Servidor a correr com sucesso!',
+        ip: req.ip,
+        // TEMPORÁRIO: diagnóstico da cadeia de proxies do Render
+        diagnostico: {
+            xff: req.get('x-forwarded-for'),
+            trueClientIp: req.get('true-client-ip'),
+            cfConnectingIp: req.get('cf-connecting-ip'),
+            socket: req.socket.remoteAddress
+        }
+    });
 });
 
 // 2. Rota para descobrir o SteamID64 a partir do que a pessoa digitou
