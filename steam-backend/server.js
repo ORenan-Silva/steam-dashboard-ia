@@ -6,9 +6,9 @@ const { rateLimit } = require('express-rate-limit');
 
 const app = express();
 
-// O Render fica atrás de um proxy. Sem isso, todos os visitantes teriam o mesmo IP
-// e dividiriam o mesmo limite de mensagens.
-app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+// No Render a requisição passa por 3 proxies (Cloudflare, balanceador e proxy local).
+// Sem confiar neles, o servidor veria o IP interno do Render e o limite por visitante não funcionaria.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 3));
 
 // Middlewares
 // Em produção, defina FRONTEND_URL (ex: https://steambb.vercel.app) para liberar só o seu site.
@@ -330,17 +330,7 @@ const lerLinhaDoStream = (linha) => {
 
 // 1. Rota de Status (o front chama ao abrir a página para "acordar" o servidor do Render)
 app.get('/api/status', (req, res) => {
-    res.json({
-        status: 'Servidor a correr com sucesso!',
-        ip: req.ip,
-        // TEMPORÁRIO: diagnóstico da cadeia de proxies do Render
-        diagnostico: {
-            xff: req.get('x-forwarded-for'),
-            trueClientIp: req.get('true-client-ip'),
-            cfConnectingIp: req.get('cf-connecting-ip'),
-            socket: req.socket.remoteAddress
-        }
-    });
+    res.json({ status: 'Servidor a correr com sucesso!', ip: req.ip });
 });
 
 // 2. Rota para descobrir o SteamID64 a partir do que a pessoa digitou

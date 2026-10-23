@@ -56,7 +56,7 @@ Variáveis opcionais do backend:
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Modelo da IA no Groq |
 | `CHAT_LIMIT_PER_MINUTE` | `10` | Mensagens por minuto que cada visitante pode mandar para a IA |
 | `FRONTEND_URL` | (vazio = libera tudo) | Endereço do site em produção, para o CORS |
-| `TRUST_PROXY` | `1` | Quantos proxies existem na frente do servidor (o Render usa 1) |
+| `TRUST_PROXY` | `3` | Quantos proxies existem na frente do servidor (no Render são 3: Cloudflare, balanceador e proxy local) |
 
 ### 2. Front-end
 ```bash
