@@ -6,7 +6,7 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 
 ## ✨ Funcionalidades Principais
 
-* 👋 **Primeira Tela que Explica o Site:** Mostra o que o painel entrega, tem um botão **VER UM EXEMPLO** (carrega um perfil público sem precisar procurar o seu) e um passo a passo de "onde acho meu perfil?".
+* 👋 **Primeira Tela que Explica o Site:** Mostra o que o painel entrega e tem um passo a passo de "onde acho meu perfil?".
 * 🗂️ **Navegação por Abas:** **PERFIL | VALOR | DUELO | JOGOS**, fixas no topo ao rolar. Trocar de aba não perde cálculos nem varreduras, e um link de duelo já abre na aba DUELO.
 * 🔍 **Busca de Perfil Flexível:** Aceita o `SteamID64`, o link do perfil (`steamcommunity.com/id/seunome`) ou só o nome personalizado.
 * 🔗 **Link Compartilhável com Prévia:** Depois da busca, a URL vira `?id=seunome`. No WhatsApp, Discord e Telegram o link aparece com um card brutalista gerado na hora, com nome, horas e jogos nunca abertos.
@@ -87,7 +87,7 @@ npm install
 npm run dev
 npm test        # testes com Vitest
 ```
-Por padrão o front conversa com `http://localhost:3001`. Para apontar para outro backend, crie um `.env.local` com `VITE_API_URL=...` (veja `.env.example`). O botão **VER UM EXEMPLO** da primeira tela carrega o perfil definido em `VITE_PERFIL_EXEMPLO` (padrão: `arcticeaagle`).
+Por padrão o front conversa com `http://localhost:3001`. Para apontar para outro backend, crie um `.env.local` com `VITE_API_URL=...` (veja `.env.example`).
 
 ---
 

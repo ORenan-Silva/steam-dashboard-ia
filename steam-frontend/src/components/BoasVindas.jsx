@@ -1,4 +1,4 @@
-import { botaoBrutal, cartaoBrutal } from '../lib/estilos';
+import { cartaoBrutal } from '../lib/estilos';
 
 const RECURSOS = [
   { icone: '💸', titulo: 'VALOR DA CONTA', texto: 'O preço de cada jogo na loja brasileira, somado.', cor: 'text-cyan-400' },
@@ -7,8 +7,8 @@ const RECURSOS = [
   { icone: '⚔', titulo: 'DUELO COM AMIGOS', texto: 'Compare bibliotecas e descubra quem é o pior gamer.', cor: 'text-red-400' },
 ];
 
-// Primeira tela: explica o que o site faz e deixa ver um exemplo antes de procurar o próprio perfil
-const BoasVindas = ({ onExemplo, carregando }) => (
+// Primeira tela: explica o que o site faz e ajuda a achar o próprio perfil
+const BoasVindas = () => (
   <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#fbbf24] flex flex-col gap-8`}>
     <div className="flex flex-col gap-4">
       <h2 className="text-3xl md:text-5xl font-black uppercase leading-tight">
@@ -30,16 +30,8 @@ const BoasVindas = ({ onExemplo, carregando }) => (
       ))}
     </div>
 
-    <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
-      <button
-        onClick={onExemplo}
-        disabled={carregando}
-        className={`${botaoBrutal} bg-amber-400 hover:bg-amber-500 text-zinc-950 py-4 px-6 text-base md:text-lg shrink-0`}
-      >
-        ▶ VER UM EXEMPLO
-      </button>
-
-      <details className="group bg-zinc-950 border-4 border-zinc-700 open:border-zinc-200 p-4 flex-1">
+    <div>
+      <details className="group bg-zinc-950 border-4 border-zinc-700 open:border-zinc-200 p-4">
         <summary className="font-black uppercase text-sm cursor-pointer select-none list-none flex justify-between gap-4">
           ONDE ACHO MEU PERFIL?
           <span className="group-open:rotate-45 transition-transform" aria-hidden="true">+</span>

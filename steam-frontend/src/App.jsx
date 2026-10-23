@@ -18,9 +18,6 @@ import { useStatusServidor } from './hooks/useStatusServidor';
 const LOTE_DE_PRECOS = 50;
 const CALCULO_INICIAL = { estado: 'parado', progresso: 0, falharam: 0 };
 
-// Perfil do botão "VER UM EXEMPLO" da primeira tela (precisa ser público, com os detalhes de jogo públicos)
-const PERFIL_EXEMPLO = import.meta.env.VITE_PERFIL_EXEMPLO || 'arcticeaagle';
-
 // Link compartilhável: usa o nome personalizado do perfil quando existe, senão o SteamID64
 const idParaLink = (perfil) => perfil.profileurl?.match(/\/id\/([^/]+)/)?.[1] || perfil.steamid;
 const parametroDaUrl = (nome) => new URLSearchParams(window.location.search).get(nome) || '';
@@ -270,7 +267,7 @@ function App() {
           {!profile && loading && <EsqueletoPerfil />}
 
           {!profile && !loading && (
-            <BoasVindas onExemplo={() => { setBusca(PERFIL_EXEMPLO); buscarDados(PERFIL_EXEMPLO); }} carregando={loading} />
+            <BoasVindas />
           )}
 
           {profile && !temBiblioteca && (
