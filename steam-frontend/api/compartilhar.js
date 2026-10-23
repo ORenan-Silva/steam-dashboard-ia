@@ -5,12 +5,10 @@ import { buscarResumoDoPerfil } from './_perfil.js';
 
 const escapar = (texto) => String(texto).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Edge runtime: responde rápido para os robôs, no mesmo ambiente da imagem de prévia
-export const config = { runtime: 'edge' };
-
-export default async function handler(request) {
-  const url = new URL(request.url);
-  const origem = url.origin;
+export default async function handler(req, res) {
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const origem = `${req.headers['x-forwarded-proto'] || 'https'}://${host}`;
+  const url = new URL(req.url, origem);
   const id = url.searchParams.get('id') || '';
   const vs = url.searchParams.get('vs') || '';
 
@@ -56,10 +54,8 @@ export default async function handler(request) {
 <body><a href="${escapar(linkDoSite)}">${escapar(titulo)}</a></body>
 </html>`;
 
-  return new Response(html, {
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400',
-    },
-  });
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400');
+  res.end(html);
 }

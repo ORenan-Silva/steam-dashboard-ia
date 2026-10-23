@@ -11,10 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@vercel/analytics": "^2.0.1",
-    "@vercel/og": "^1.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "satori": "^0.63.2",
     "styled-components": "^6.4.4"
   },
   "devDependencies": {

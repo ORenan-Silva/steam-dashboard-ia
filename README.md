@@ -25,7 +25,7 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 * **React** (com Vite)
 * **Tailwind CSS** (para o design Neo-Brutalista de alto contraste)
 * **Styled-Components** (para animações de *loading* personalizadas e dinâmicas)
-* **@vercel/og** (imagem de prévia dos links, gerada numa função da Vercel)
+* **satori + resvg** (imagem de prévia dos links, gerada numa função Node.js da Vercel)
 * **Vercel Analytics** (contagem de visitas)
 * **Vitest** (testes)
 
