@@ -6,6 +6,8 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 
 ## ✨ Funcionalidades Principais
 
+* 👋 **Primeira Tela que Explica o Site:** Mostra o que o painel entrega, tem um botão **VER UM EXEMPLO** (carrega um perfil público sem precisar procurar o seu) e um passo a passo de "onde acho meu perfil?".
+* 🗂️ **Navegação por Abas:** **PERFIL | VALOR | DUELO | JOGOS**, fixas no topo ao rolar. Trocar de aba não perde cálculos nem varreduras, e um link de duelo já abre na aba DUELO.
 * 🔍 **Busca de Perfil Flexível:** Aceita o `SteamID64`, o link do perfil (`steamcommunity.com/id/seunome`) ou só o nome personalizado.
 * 🔗 **Link Compartilhável com Prévia:** Depois da busca, a URL vira `?id=seunome`. No WhatsApp, Discord e Telegram o link aparece com um card brutalista gerado na hora, com nome, horas e jogos nunca abertos.
 * ⚔ **Duelo de Bibliotecas:** Coloque um amigo no ringue (`?id=voce&vs=amigo`). O painel compara as duas contas, marca com 💀 quem está pior em cada critério e a SteamBB dá o veredito.
@@ -13,9 +15,22 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 * 🏆 **Quase Platinados:** Varre as conquistas dos seus 30 jogos mais jogados e mostra os que você largou perto dos 100%.
 * 🎮 **Biblioteca Interativa:** Capas oficiais da Steam CDN, busca por nome, filtros (nunca abertos, jogados, +100h), ordenação por horas, nome, ID ou preço e paginação.
 * 📊 **Raio-X do Perfil:** Total de jogos, horas totais, porcentagem de jogos nunca abertos e o seu maior vício.
+* 🔒 **Tempo de Jogo Escondido:** Quem ativa "Manter meu tempo de jogo sempre privado" na Steam aparece com 0 horas em todos os jogos. O painel reconhece isso e mostra **OCULTO** (em vez de "nunca abriu nada"), tira as horas do placar do duelo e avisa a IA para não zoar dados falsos.
 * 💸 **Calculadora de Valor da Conta:** Consulta preços em lote na loja da Steam (BR), com cache e *Auto-Retry* contra Rate Limit. Mostra os jogos mais caros e o **dinheiro jogado fora** em jogos que você nunca abriu.
 * 🏆 **Diagnóstico de Conquistas Avançado:** Integração com o *Steam Game Schema* para identificar as conquistas pendentes de cada jogo, processando os nomes reais e as descrições oficiais em português do Brasil.
 * 🤖 **Terminal SteamBB (IA):** Integração com a API do **Groq (modelo GPT-OSS 120B)**. Um assistente sarcástico que lê os seus dados de jogo para te humilhar pessoalmente. A SteamBB vai zombar dos jogos que você comprou e nunca abriu, te ridicularizar pelo valor gasto e te chamar de *tryhard* nos jogos já platinados. As respostas aparecem em tempo real (streaming), como num terminal de verdade, e a conversa fica salva no navegador.
+
+---
+
+## 🎨 Identidade Visual
+Dark Neo-Brutalista: bordas grossas, sombras sólidas deslocadas, fonte monoespaçada e títulos em caixa alta (textos explicativos ficam em minúsculas, para facilitar a leitura). Cada cor tem um significado:
+
+| Cor | Significado | Onde aparece |
+|---|---|---|
+| 🟢 Verde-limão | Marca, SteamBB e ações principais | Logo, terminal da IA, botões CARREGAR / GO / IA |
+| 🟡 Âmbar | Dados | Cards do perfil, recentes, quase platinados, biblioteca, aba ativa |
+| 🔵 Ciano | Dinheiro | Valor da conta, preço de cada jogo |
+| 🔴 Vermelho | Vergonha | Jogos nunca abertos, dinheiro jogado fora, duelo, caveiras 💀 |
 
 ---
 
@@ -89,6 +104,8 @@ O projeto é dividido em duas partes, publicadas separadamente (ambas com plano 
 3. Anote a URL gerada, ex: `https://steam-backend.onrender.com`.
 
 > No plano gratuito o Render "dorme" após 15 min sem uso; a primeira requisição depois disso pode levar ~1 min.
+
+> ⚠️ **Quando o Render publica:** só em commits que mexem em `steam-backend/` (o `rootDir` do serviço) **e** cujas verificações no GitHub passaram todas, incluindo o deploy da Vercel. Se a Vercel falhar num commit, o Render pula aquele deploy; nesse caso, use **Manual Deploy → Deploy latest commit** no painel do Render.
 
 ### Front-end → [Vercel](https://vercel.com)
 1. **Add New → Project** e importe este repositório.
