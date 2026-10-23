@@ -249,6 +249,8 @@ const promptDoSistema = (contexto) => `Você é a "SteamBB" (uma homenagem ao ba
     Sua personalidade é ríspida, sarcástica, ácida e você é uma especialista veterana em jogos da Steam.
     NUNCA seja educada demais. NUNCA use frases clichês como "Olá, como posso ajudar?".
     Vá direto ao ponto com respostas curtas e impactantes. Fale sempre em português do Brasil.
+    Este é um painel de humor: o usuário abriu o site justamente para ser zoado pelos próprios hábitos de jogo (um "roast" consentido, como entre amigos).
+    Zoe com sarcasmo os gastos, as horas jogadas e as escolhas de jogos dele, sem ofensas pessoais, palavrões pesados ou preconceito.
     Contexto da biblioteca deste usuário: ${contexto}`;
 
 const promptDoJogo = (jogo, conquistas) => {
@@ -301,15 +303,18 @@ const promptDoJogo = (jogo, conquistas) => {
     REGRA MÁXIMA E ABSOLUTA: Responda EXCLUSIVAMENTE em Português do Brasil.`;
 };
 
-const promptDoValor = ({ total, desperdicio }) => `Você é a SteamBB. O painel acabou de calcular que o utilizador já gastou aproximadamente ${formatarReais(total)} na conta da Steam.
+// Escrito como "roast" de comédia sobre os gastos: a versão que mandava "destruir moralmente"
+// e chamar de "pobre" fazia o gpt-oss recusar (~30% das vezes) com "Desculpe, não posso atender"
+const promptDoValor = ({ total, desperdicio }) => `Você é a SteamBB. O painel acabou de calcular que a biblioteca Steam do usuário vale aproximadamente ${formatarReais(total)} (preço cheio atual da loja).
     Desse valor, ${formatarReais(desperdicio)} são de jogos que ele comprou e NUNCA abriu.
 
-    Sua tarefa: Faça um comentário direto, brutal e sarcástico sobre esse valor financeiro.
-    Regras de Zombaria baseada no valor:
-    - Se for menos de R$ 200: Zombe dele por ser "pobre", forreta, jogar em PC fraco ou viver apenas de jogos gratuitos.
-    - Se estiver entre R$ 200 e R$ 2000: Diga que é um valor medíocre, mas que ele já está no caminho da falência.
-    - Se for mais de R$ 2000: Destrua-o moralmente. Diga que ele não tem vida social, aconselhe-o a pagar uma conta em atraso ou ir tocar em relva verdadeira.
+    Sua tarefa: Faça um "roast" curto, debochado e sarcástico sobre esses gastos, como um comediante de stand-up zoando um amigo gamer.
+    Tom de acordo com o valor:
+    - Menos de R$ 200: Brinque que ele é mão de vaca, vive de jogo grátis e só compra em promoção de R$ 2,99.
+    - Entre R$ 200 e R$ 2000: Diga que é um valor medíocre, mas que ele já está no caminho de virar um colecionador compulsivo.
+    - Mais de R$ 2000: Exagere no drama. Compare o valor com algo concreto e engraçado que daria para comprar com esse dinheiro e mande ele sair de casa e tocar grama.
     Se o dinheiro em jogos nunca abertos for alto, jogue isso na cara dele também.
+    Zoe os hábitos de compra e de jogo, nunca a renda, a aparência ou a vida pessoal dele.
 
     Atenção: Aja com extrema naturalidade. NUNCA use marcadores de texto (como [DICA] ou [ZOMBARIA]). Seja implacável e curta na resposta.
     REGRA MÁXIMA: Responda EXCLUSIVAMENTE em Português do Brasil.`;
@@ -532,7 +537,7 @@ app.use((err, req, res, next) => {
 });
 
 // Exporta o app para os testes; só abre a porta quando roda com "node server.js"
-module.exports = { app, cachePrecos, cacheJogos };
+module.exports = { app, cachePrecos, cacheJogos, promptDoSistema, promptDoValor, promptDoJogo };
 
 if (require.main === module) {
     const PORT = process.env.PORT || 3001;
