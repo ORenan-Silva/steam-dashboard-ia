@@ -30,7 +30,13 @@ describe('resumirBiblioteca', () => {
   });
 
   test('biblioteca vazia não quebra', () => {
-    expect(resumirBiblioteca([])).toEqual({ totalMinutos: 0, nuncaAbertos: 0, maisJogado: null });
+    expect(resumirBiblioteca([])).toEqual({ totalMinutos: 0, nuncaAbertos: 0, maisJogado: null, tempoPrivado: false });
+  });
+
+  test('todos os jogos com 0 horas = tempo de jogo escondido', () => {
+    const escondidos = JOGOS.map(g => ({ ...g, playtime_forever: 0 }));
+    expect(resumirBiblioteca(escondidos).tempoPrivado).toBe(true);
+    expect(resumirBiblioteca(JOGOS).tempoPrivado).toBe(false);
   });
 });
 
@@ -48,6 +54,15 @@ describe('somarValores', () => {
     // Jogo grátis nunca aberto não conta como dinheiro jogado fora
     expect(valores.pagosNuncaAbertos).toBe(1);
     expect(valores.maisCaros.map(g => g.name)).toEqual(['Elden Ring', 'Stardew Valley']);
+  });
+
+  test('com o tempo de jogo escondido, não existe "dinheiro jogado fora"', () => {
+    const escondidos = JOGOS.map(g => ({ ...g, playtime_forever: 0 }));
+    const valores = somarValores(escondidos, { 2: { cheio: 49.99, atual: 49.99 }, 3: { cheio: 100, atual: 100 } });
+    expect(valores.total).toBeCloseTo(149.99);
+    expect(valores.desperdicio).toBe(0);
+    expect(valores.pagosNuncaAbertos).toBe(0);
+    expect(valores.tempoPrivado).toBe(true);
   });
 
   test('ignora jogos ainda sem preço consultado', () => {

@@ -383,3 +383,54 @@ test('duelo contra si mesmo ou sem rival válido devolve 400', async () => {
         assert.equal(res.status, 400, String(rivalId));
     }
 });
+
+// ---------- Tempo de jogo escondido (todos os jogos com 0 horas) ----------
+
+const JOGOS_ESCONDIDOS = [
+    { appid: 10, name: 'Counter-Strike', playtime_forever: 0 },
+    { appid: 20, name: 'Stardew Valley', playtime_forever: 0 },
+];
+
+test('tempo de jogo escondido: o duelo não trata o rival como "nunca abriu nada"', async () => {
+    respostaGet = (url, params) => {
+        if (url.includes('GetOwnedGames')) return { data: { response: { games: params.steamid === RIVAL_ID ? JOGOS_ESCONDIDOS : JOGOS } } };
+        if (url.includes('GetPlayerSummaries')) return { data: { response: { players: [{ steamid: STEAM_ID, personaname: 'Renan' }, { steamid: RIVAL_ID, personaname: 'Amigo' }] } } };
+        throw erroHttp(404);
+    };
+    const res = await perguntar({ steamId: STEAM_ID, messages: [], event: { type: 'duel', rivalId: RIVAL_ID } });
+    await res.text();
+    const prompt = posts[0].messages.at(-1).content;
+    assert.match(prompt, /- Amigo: 2 jogos, mas ESCONDE o tempo de jogo/);
+    assert.doesNotMatch(prompt, /- Amigo: .*nunca abertos \(100%/);
+    assert.match(prompt, /- Renan: 3 jogos, 1501\.0h jogadas/);
+});
+
+test('tempo de jogo escondido: contexto e prompt do jogo avisam a IA para não dizer "nunca abriu"', async () => {
+    respostaGet = (url) => {
+        if (url.includes('GetOwnedGames')) return { data: { response: { games: JOGOS_ESCONDIDOS } } };
+        throw erroHttp(400);
+    };
+    const res = await perguntar({ steamId: STEAM_ID, messages: [], event: { type: 'game', appId: 20 } });
+    await res.text();
+    const [sistema, , ] = posts[0].messages;
+    const promptJogo = posts[0].messages.at(-1).content;
+    assert.match(sistema.content, /ESCONDE o tempo de jogo/);
+    assert.doesNotMatch(sistema.content, /NUNCA abertos/);
+    assert.match(promptJogo, /Desconhecido: o usuário ESCONDE o tempo de jogo/);
+    assert.doesNotMatch(promptJogo, /Nunca sequer abriu/);
+});
+
+test('tempo de jogo escondido: quase platinados ainda analisa os jogos', async () => {
+    let chamadas = 0;
+    respostaGet = (url) => {
+        if (url.includes('GetOwnedGames')) return { data: { response: { games: JOGOS_ESCONDIDOS } } };
+        if (url.includes('GetPlayerAchievements')) {
+            chamadas++;
+            return { data: { playerstats: { achievements: [{ achieved: 1 }, { achieved: 1 }, { achieved: 0 }] } } };
+        }
+        throw erroHttp(404);
+    };
+    const dados = await (await pedir(`/api/almost/${STEAM_ID}`)).json();
+    assert.equal(chamadas, 2);
+    assert.equal(dados.quase.length, 2);
+});

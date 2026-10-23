@@ -3,13 +3,18 @@ export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const ERRO_PADRAO = 'ERRO: CONEXÃO COM O SERVIDOR PERDIDA.';
 
-// fetch com a mensagem de erro do backend (ex: limite de mensagens) virando um Error legível
+// fetch com a mensagem de erro do backend (ex: limite de mensagens) virando um Error legível.
+// Consultas de leitura (GET) tentam mais uma vez se a rede falhar no meio do caminho.
 async function pedir(caminho, opcoes) {
+  const tentativas = opcoes?.method && opcoes.method !== 'GET' ? 1 : 2;
   let res;
-  try {
-    res = await fetch(`${API_URL}${caminho}`, opcoes);
-  } catch {
-    throw new Error('ERRO: SERVIDOR FORA DO AR OU SEM INTERNET.');
+  for (let tentativa = 1; !res; tentativa++) {
+    try {
+      res = await fetch(`${API_URL}${caminho}`, opcoes);
+    } catch {
+      if (tentativa >= tentativas) throw new Error('ERRO: SERVIDOR FORA DO AR OU SEM INTERNET.');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
   if (!res.ok) {
     let mensagem;

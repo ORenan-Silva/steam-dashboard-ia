@@ -43,10 +43,21 @@ const ValorDaConta = ({ calculo, valores, onCalcular }) => {
             </div>
             <div className="bg-red-500 text-zinc-950 border-4 border-zinc-200 p-6 flex flex-col gap-2">
               <span className="text-sm font-black uppercase">💀 DINHEIRO JOGADO FORA:</span>
-              <span className="text-3xl md:text-4xl font-black break-all">{formatarReais(valores.desperdicio)}</span>
-              <span className="text-xs font-black uppercase">
-                EM {valores.pagosNuncaAbertos} JOGOS PAGOS QUE VOCÊ NUNCA ABRIU
-              </span>
+              {valores.tempoPrivado ? (
+                <>
+                  <span className="text-3xl md:text-4xl font-black">🔒 ???</span>
+                  <span className="text-xs font-black uppercase">
+                    VOCÊ ESCONDE O TEMPO DE JOGO, ENTÃO NÃO DÁ PRA SABER O QUE NUNCA FOI ABERTO. SUSPEITO.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl md:text-4xl font-black break-all">{formatarReais(valores.desperdicio)}</span>
+                  <span className="text-xs font-black uppercase">
+                    EM {valores.pagosNuncaAbertos} JOGOS PAGOS QUE VOCÊ NUNCA ABRIU
+                  </span>
+                </>
+              )}
             </div>
           </div>
 

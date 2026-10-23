@@ -2,18 +2,37 @@ import { useState } from 'react';
 import { botaoBrutal, campoBrutal, cartaoBrutal } from '../lib/estilos';
 import { formatarHoras } from '../lib/biblioteca';
 
-// Em cada critério, quem tiver o número MAIOR leva a caveira (é o "pior")
+// Em cada critério, quem tiver o número MAIOR leva a caveira (é o "pior").
+// Critérios com usaHoras não existem para quem esconde o tempo de jogo na Steam.
 const CRITERIOS = [
   { rotulo: 'JOGOS', valor: (l) => l.totalJogos, formatar: (v) => v },
-  { rotulo: 'HORAS TOTAIS', valor: (l) => l.resumo.totalMinutos, formatar: (v) => formatarHoras(v, 0) },
-  { rotulo: 'NUNCA ABERTOS', valor: (l) => l.resumo.nuncaAbertos, formatar: (v) => v },
+  { rotulo: 'HORAS TOTAIS', usaHoras: true, valor: (l) => l.resumo.totalMinutos, formatar: (v) => formatarHoras(v, 0) },
+  { rotulo: 'NUNCA ABERTOS', usaHoras: true, valor: (l) => l.resumo.nuncaAbertos, formatar: (v) => v },
   {
     rotulo: '% ABANDONADA',
+    usaHoras: true,
     valor: (l) => (l.totalJogos ? Math.round((l.resumo.nuncaAbertos / l.totalJogos) * 100) : 0),
     formatar: (v) => `${v}%`,
   },
-  { rotulo: 'MAIOR VÍCIO', valor: (l) => l.resumo.maisJogado?.playtime_forever || 0, formatar: (v) => formatarHoras(v, 0) },
+  { rotulo: 'MAIOR VÍCIO', usaHoras: true, valor: (l) => l.resumo.maisJogado?.playtime_forever || 0, formatar: (v) => formatarHoras(v, 0) },
 ];
+
+const OCULTO = '🔒 OCULTO';
+
+// Compara um critério; se algum lado esconde as horas, ninguém leva caveira nele
+const comparar = (c, a, b) => {
+  const aOculto = c.usaHoras && a.resumo.tempoPrivado;
+  const bOculto = c.usaHoras && b.resumo.tempoPrivado;
+  const va = c.valor(a);
+  const vb = c.valor(b);
+  const comparavel = !aOculto && !bOculto;
+  return {
+    textoA: aOculto ? OCULTO : c.formatar(va),
+    textoB: bOculto ? OCULTO : c.formatar(vb),
+    piorA: comparavel && va > vb,
+    piorB: comparavel && vb > va,
+  };
+};
 
 // A caveira fica no canto para sobrar espaço para o número no celular
 const Celula = ({ texto, pior }) => (
@@ -33,13 +52,12 @@ const Jogador = ({ profile }) => (
 const Duelo = ({ desafiante, rival, carregando, erro, onDesafiar, onTrocar, onVeredito, ocupado }) => {
   const [busca, setBusca] = useState('');
 
-  const placar = rival ? CRITERIOS.reduce((total, c) => {
-    const a = c.valor(desafiante);
-    const b = c.valor(rival);
-    if (a > b) total.desafiante++;
-    if (b > a) total.rival++;
-    return total;
-  }, { desafiante: 0, rival: 0 }) : null;
+  const comparacoes = rival ? CRITERIOS.map(c => ({ c, ...comparar(c, desafiante, rival) })) : [];
+  const placar = {
+    desafiante: comparacoes.filter(x => x.piorA).length,
+    rival: comparacoes.filter(x => x.piorB).length,
+  };
+  const escondem = rival ? [desafiante, rival].filter(l => l.resumo.tempoPrivado).map(l => l.profile.personaname) : [];
 
   return (
     <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#ef4444] flex flex-col gap-6`}>
@@ -83,20 +101,23 @@ const Duelo = ({ desafiante, rival, carregando, erro, onDesafiar, onTrocar, onVe
             <Jogador profile={desafiante.profile} />
             <Jogador profile={rival.profile} />
 
-            {CRITERIOS.map(c => {
-              const a = c.valor(desafiante);
-              const b = c.valor(rival);
-              return [
-                <span key={`${c.rotulo}-r`} className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase break-words">{c.rotulo}</span>,
-                <Celula key={`${c.rotulo}-a`} texto={c.formatar(a)} pior={a > b} />,
-                <Celula key={`${c.rotulo}-b`} texto={c.formatar(b)} pior={b > a} />,
-              ];
-            })}
+            {comparacoes.map(({ c, textoA, textoB, piorA, piorB }) => [
+              <span key={`${c.rotulo}-r`} className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase break-words">{c.rotulo}</span>,
+              <Celula key={`${c.rotulo}-a`} texto={textoA} pior={piorA} />,
+              <Celula key={`${c.rotulo}-b`} texto={textoB} pior={piorB} />,
+            ])}
 
             <span className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase break-words">PLACAR DA VERGONHA</span>
             <div className="text-center text-3xl font-black text-red-400">{placar.desafiante}</div>
             <div className="text-center text-3xl font-black text-red-400">{placar.rival}</div>
           </div>
+
+          {escondem.length > 0 && (
+            <p className="text-xs font-black uppercase text-amber-400 bg-zinc-950 border-4 border-amber-400 p-3">
+              🔒 {escondem.join(' E ')} ESCONDE{escondem.length > 1 ? 'M' : ''} O TEMPO DE JOGO NA STEAM. OS CRITÉRIOS DE HORAS FICAM FORA DO PLACAR.
+              {' '}(STEAM &gt; PRIVACIDADE &gt; DESMARCAR "MANTER MEU TEMPO DE JOGO SEMPRE PRIVADO")
+            </p>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-4">
             <button

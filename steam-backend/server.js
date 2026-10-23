@@ -183,10 +183,12 @@ const buscarQuasePlatinados = async (steamId) => {
     const emCache = cacheQuasePlatinados.get(steamId);
     if (emCache) return emCache;
 
-    const jogos = (await buscarJogos(steamId))
-        .filter(j => j.playtime_forever > 0)
-        .sort((a, b) => b.playtime_forever - a.playtime_forever)
-        .slice(0, QUASE_JOGOS_ANALISADOS);
+    const biblioteca = await buscarJogos(steamId);
+    // Com o tempo de jogo escondido não dá para saber os mais jogados: analisa os primeiros da lista
+    const jogos = (tempoDeJogoPrivado(biblioteca)
+        ? biblioteca
+        : biblioteca.filter(j => j.playtime_forever > 0).sort((a, b) => b.playtime_forever - a.playtime_forever)
+    ).slice(0, QUASE_JOGOS_ANALISADOS);
 
     const progresso = await emParalelo(jogos, 6, async (jogo) => {
         try {
@@ -313,6 +315,10 @@ const buscarPrecos = async (appIds) => {
 
 // Resumo da biblioteca enviado para a IA. Mandar a lista inteira estoura o limite grátis
 // do Groq em bibliotecas com mais de ~400 jogos.
+// Quem ativa "Manter meu tempo de jogo sempre privado" na Steam recebe todos os jogos com 0 horas.
+// Nesse caso "0 horas" não quer dizer "nunca abriu", e a IA não pode zoar como se fosse.
+const tempoDeJogoPrivado = (jogos) => jogos.length > 0 && jogos.every(j => j.playtime_forever === 0);
+
 const resumirJogos = (jogos) => {
     const porHoras = [...jogos].sort((a, b) => b.playtime_forever - a.playtime_forever);
     return {
@@ -324,6 +330,12 @@ const resumirJogos = (jogos) => {
 
 const montarContexto = (jogos, recentes = []) => {
     if (jogos.length === 0) return 'Nenhum perfil carregado.';
+
+    if (tempoDeJogoPrivado(jogos)) {
+        return `Total: ${jogos.length} jogos. ATENÇÃO: o usuário ESCONDE o tempo de jogo nas configurações de privacidade da Steam, então as horas não estão disponíveis.
+    NÃO diga que ele nunca abriu os jogos nem invente horas; zoe a covardia de esconder o tempo de jogo.
+    Alguns jogos da biblioteca: ${jogos.slice(0, 40).map(j => j.name).join(', ')}.`.slice(0, MAX_CONTEXT_CHARS);
+    }
 
     const { porHoras, nuncaJogados, totalMinutos } = resumirJogos(jogos);
     const maisJogados = porHoras
@@ -341,6 +353,9 @@ const montarContexto = (jogos, recentes = []) => {
 };
 
 const fichaDoDuelo = (nome, jogos) => {
+    if (tempoDeJogoPrivado(jogos)) {
+        return `- ${nome}: ${jogos.length} jogos, mas ESCONDE o tempo de jogo na Steam (horas e jogos nunca abertos são desconhecidos; não invente). Alguns jogos: ${jogos.slice(0, 5).map(j => j.name).join(', ')}.`;
+    }
     const { porHoras, nuncaJogados, totalMinutos } = resumirJogos(jogos);
     const vicio = porHoras[0];
     const porcentagem = jogos.length ? Math.round((nuncaJogados.length / jogos.length) * 100) : 0;
@@ -352,6 +367,7 @@ const promptDoDuelo = (desafiante, rival) => `Você é a SteamBB. O usuário des
     ${fichaDoDuelo(rival.nome, rival.jogos)}
 
     Sua tarefa: Compare os dois como um juiz de stand-up debochado. Zoe os hábitos de jogo de cada um (acumular jogos sem abrir, horas demais no mesmo jogo, gosto duvidoso).
+    Quem esconde o tempo de jogo merece ser zoado por fugir da comparação, mas compare só o que é conhecido.
     No final, declare em uma linha separada quem é o PIOR GAMER do duelo, no formato: "VEREDITO: <nome> PERDEU."
     Zoe só os hábitos de jogo, nunca a aparência ou a vida pessoal. Seja curta, no máximo um parágrafo antes do veredito.
     REGRA MÁXIMA: Responda EXCLUSIVAMENTE em Português do Brasil.`;
@@ -364,7 +380,7 @@ const promptDoSistema = (contexto) => `Você é a "SteamBB" (uma homenagem ao ba
     Zoe com sarcasmo os gastos, as horas jogadas e as escolhas de jogos dele, sem ofensas pessoais, palavrões pesados ou preconceito.
     Contexto da biblioteca deste usuário: ${contexto}`;
 
-const promptDoJogo = (jogo, conquistas) => {
+const promptDoJogo = (jogo, conquistas, horasPrivadas = false) => {
     const horasJogadas = formatarHoras(jogo.playtime_forever);
     const pendentes = conquistas.filter(c => c.achieved === 0);
     const isPlatinado = conquistas.length > 0 && pendentes.length === 0;
@@ -381,7 +397,13 @@ const promptDoJogo = (jogo, conquistas) => {
     let comandoZombaria;
     let instrucaoFinal;
 
-    if (jogo.playtime_forever === 0) {
+    if (horasPrivadas) {
+        contextoHoras = 'Desconhecido: o usuário ESCONDE o tempo de jogo nas configurações de privacidade da Steam. NÃO diga que ele nunca abriu o jogo.';
+        comandoZombaria = 'Zombe do fato dele esconder as horas de jogo, como quem tem vergonha do quanto joga.';
+        instrucaoFinal = isPlatinado
+            ? 'Mencione que pelo menos as conquistas denunciam: ele platinou. Pergunte o que ele tanto esconde.'
+            : 'Use as conquistas para adivinhar, com deboche, se ele jogou muito ou pouco, e pergunte se ele quer ajuda para platinar.';
+    } else if (jogo.playtime_forever === 0) {
         contextoHoras = 'O usuário comprou este jogo mas tem exatas 0.0 horas jogadas. Nunca sequer abriu.';
         comandoZombaria = 'Zombe severamente do fato dele ser um acumulador compulsivo que compra jogos para deixá-los apodrecendo na biblioteca sem nunca jogar.';
         instrucaoFinal = 'Pergunte, de forma arrogante, se ele clicou por acidente ou se finalmente vai tomar vergonha na cara para instalar o jogo.';
@@ -685,7 +707,7 @@ app.post('/api/chat', limiteChat, async (req, res) => {
             return res.status(400).json({ error: 'Jogo não encontrado na biblioteca.' });
         }
         const conquistas = await buscarConquistas(steamId, jogo.appid);
-        history.push({ role: 'user', content: promptDoJogo(jogo, conquistas) });
+        history.push({ role: 'user', content: promptDoJogo(jogo, conquistas, tempoDeJogoPrivado(jogos)) });
     } else if (event?.type === 'value') {
         const total = Number(event.total);
         const desperdicio = Number(event.wasted);

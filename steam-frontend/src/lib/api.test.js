@@ -24,9 +24,26 @@ describe('getJson', () => {
     await expect(getJson('/api/status')).rejects.toThrow('ERRO: CONEXÃO COM O SERVIDOR PERDIDA.');
   });
 
-  test('sem internet ou servidor fora do ar', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+  test('sem internet ou servidor fora do ar (depois de tentar 2 vezes)', async () => {
+    const fetchFalso = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    vi.stubGlobal('fetch', fetchFalso);
     await expect(getJson('/api/status')).rejects.toThrow('ERRO: SERVIDOR FORA DO AR OU SEM INTERNET.');
+    expect(fetchFalso).toHaveBeenCalledTimes(2);
+  });
+
+  test('queda momentânea de rede: a segunda tentativa resolve', async () => {
+    const fetchFalso = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(respostaJson(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchFalso);
+    await expect(getJson('/api/almost/1')).resolves.toEqual({ ok: true });
+  });
+
+  test('mensagens para a IA (POST) não são reenviadas sozinhas', async () => {
+    const fetchFalso = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    vi.stubGlobal('fetch', fetchFalso);
+    await expect(conversarComIA({ messages: [] }, () => {})).rejects.toThrow('SEM INTERNET');
+    expect(fetchFalso).toHaveBeenCalledTimes(1);
   });
 });
 

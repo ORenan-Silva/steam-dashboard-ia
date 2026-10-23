@@ -2,8 +2,8 @@ import { capaDoJogo, formatarHoras, formatarReais } from '../lib/biblioteca';
 
 const CAPA_RESERVA = 'https://placehold.co/460x215/18181b/e4e4e7?text=SEM+CAPA';
 
-const CartaoJogo = ({ game, preco, onClick, ocupado }) => {
-  const nuncaAberto = game.playtime_forever === 0;
+const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado }) => {
+  const nuncaAberto = !tempoPrivado && game.playtime_forever === 0;
 
   return (
     <button
@@ -29,7 +29,7 @@ const CartaoJogo = ({ game, preco, onClick, ocupado }) => {
       <div className="p-4 grow flex flex-col justify-between gap-4 w-full">
         <h4 className="text-base font-black uppercase line-clamp-2 leading-tight text-zinc-100" title={game.name}>{game.name}</h4>
         <div className="flex justify-between items-center gap-2 text-xs pt-3 border-t-4 border-zinc-200 font-bold mt-auto">
-          <span className="bg-amber-400 text-zinc-950 border-2 border-zinc-200 px-2 py-1">⏳ {formatarHoras(game.playtime_forever)}</span>
+          <span className="bg-amber-400 text-zinc-950 border-2 border-zinc-200 px-2 py-1">{tempoPrivado ? '🔒 OCULTO' : `⏳ ${formatarHoras(game.playtime_forever)}`}</span>
           {preco ? (
             <span className="bg-cyan-400 text-zinc-950 border-2 border-zinc-200 px-2 py-1">
               {preco.cheio > 0 ? formatarReais(preco.cheio) : 'GRÁTIS'}

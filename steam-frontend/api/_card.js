@@ -68,9 +68,10 @@ export const cardDoPerfil = (resumo, host) => moldura(
   ),
   h('div', { gap: 18 },
     estatistica('JOGOS', numero(resumo.jogos), COR.texto),
-    estatistica('HORAS', `${numero(resumo.horas)}H`, COR.ambar),
-    estatistica('NUNCA ABERTOS', numero(resumo.nuncaAbertos), COR.vermelho),
-    estatistica('MAIOR VÍCIO', resumo.maisJogado ? `${numero(resumo.maisJogado.horas)}H` : '—', COR.lima, resumo.maisJogado?.nome),
+    // A fonte não tem emoji de cadeado: o texto "OCULTO" faz o papel
+    estatistica('HORAS', resumo.tempoPrivado ? 'OCULTO' : `${numero(resumo.horas)}H`, COR.ambar),
+    estatistica('NUNCA ABERTOS', resumo.tempoPrivado ? 'OCULTO' : numero(resumo.nuncaAbertos), COR.vermelho),
+    estatistica('MAIOR VÍCIO', resumo.tempoPrivado ? 'OCULTO' : resumo.maisJogado ? `${numero(resumo.maisJogado.horas)}H` : '—', COR.lima, resumo.tempoPrivado ? 'TEMPO DE JOGO ESCONDIDO' : resumo.maisJogado?.nome),
   ),
   rodape('QUANTO VOCÊ JÁ TORROU NA STEAM? DESCUBRA →'),
 );

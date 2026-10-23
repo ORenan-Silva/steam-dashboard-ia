@@ -25,6 +25,8 @@ export async function buscarResumoDoPerfil(entrada, { comJogos = true, timeoutMs
       horas: Math.round(jogos.reduce((soma, j) => soma + j.playtime_forever, 0) / 60),
       nuncaAbertos: jogos.filter(j => j.playtime_forever === 0).length,
       maisJogado: maisJogado && { nome: maisJogado.name, horas: Math.round(maisJogado.playtime_forever / 60) },
+      // "Manter meu tempo de jogo sempre privado": todos os jogos chegam com 0 horas
+      tempoPrivado: jogos.length > 0 && jogos.every(j => j.playtime_forever === 0),
     };
   } catch (err) {
     console.error('Prévia sem dados do perfil:', err.message);

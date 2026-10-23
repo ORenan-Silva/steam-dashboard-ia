@@ -7,16 +7,21 @@ export const formatarReais = (valor) =>
 export const capaDoJogo = (appid) =>
   `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg`;
 
+// Quem ativa "Manter meu tempo de jogo sempre privado" na Steam aparece com 0 horas em todos os jogos.
+// Nesse caso, "0 horas" não quer dizer "nunca abriu".
+export const tempoDeJogoPrivado = (games) => games.length > 0 && games.every(g => g.playtime_forever === 0);
+
 // Números gerais da biblioteca para os cards do perfil
 export const resumirBiblioteca = (games) => {
   const totalMinutos = games.reduce((soma, g) => soma + g.playtime_forever, 0);
   const nuncaAbertos = games.filter(g => g.playtime_forever === 0).length;
   const maisJogado = games.reduce((maior, g) => (!maior || g.playtime_forever > maior.playtime_forever ? g : maior), null);
-  return { totalMinutos, nuncaAbertos, maisJogado };
+  return { totalMinutos, nuncaAbertos, maisJogado, tempoPrivado: tempoDeJogoPrivado(games) };
 };
 
 // Soma o valor da conta com os preços já consultados (preço cheio da loja BR)
 export const somarValores = (games, precos) => {
+  const tempoPrivado = tempoDeJogoPrivado(games);
   let total = 0;
   let desperdicio = 0;
   let pagosNuncaAbertos = 0;
@@ -27,12 +32,12 @@ export const somarValores = (games, precos) => {
     if (!preco) continue;
     total += preco.cheio;
     if (preco.cheio > 0) comPreco.push({ ...game, preco: preco.cheio });
-    if (game.playtime_forever === 0 && preco.cheio > 0) {
+    if (!tempoPrivado && game.playtime_forever === 0 && preco.cheio > 0) {
       desperdicio += preco.cheio;
       pagosNuncaAbertos++;
     }
   }
 
   const maisCaros = comPreco.sort((a, b) => b.preco - a.preco).slice(0, 3);
-  return { total, desperdicio, pagosNuncaAbertos, maisCaros };
+  return { total, desperdicio, pagosNuncaAbertos, maisCaros, tempoPrivado };
 };

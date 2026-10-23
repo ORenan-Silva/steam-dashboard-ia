@@ -11,7 +11,7 @@ const FILTROS = {
   vicio: { rotulo: '+100H', teste: (g) => g.playtime_forever >= 6000 },
 };
 
-const Biblioteca = ({ games, precos, onGameClick, ocupado }) => {
+const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
   const [sortBy, setSortBy] = useState('hours');
@@ -80,7 +80,8 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado }) => {
             className={`${campoBrutal} flex-1 px-4 py-3 text-sm`}
           />
           <div className="flex flex-wrap gap-2">
-            {Object.entries(FILTROS).map(([chave, { rotulo }]) => (
+            {/* Sem as horas, os filtros por tempo de jogo não fazem sentido */}
+            {Object.entries(FILTROS).filter(([chave]) => !tempoPrivado || chave === 'todos').map(([chave, { rotulo }]) => (
               <button
                 key={chave}
                 onClick={() => mudar(setFiltro)(chave)}
@@ -109,6 +110,7 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado }) => {
               preco={precos[game.appid]}
               onClick={onGameClick}
               ocupado={ocupado}
+              tempoPrivado={tempoPrivado}
             />
           ))}
         </div>

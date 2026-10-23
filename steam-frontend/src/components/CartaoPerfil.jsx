@@ -66,20 +66,36 @@ const CartaoPerfil = ({ profile, totalJogos, resumo }) => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Estatistica rotulo="Jogos" valor={totalJogos} cor="text-zinc-100" />
-        <Estatistica rotulo="Horas totais" valor={formatarHoras(resumo.totalMinutos, 0)} cor="text-amber-400" />
-        <Estatistica
-          rotulo="Nunca abertos"
-          valor={resumo.nuncaAbertos}
-          detalhe={`${porcentagemNunca}% DA BIBLIOTECA`}
-          cor="text-red-400"
-        />
-        <Estatistica
-          rotulo="Maior vício"
-          valor={resumo.maisJogado ? formatarHoras(resumo.maisJogado.playtime_forever, 0) : '—'}
-          detalhe={resumo.maisJogado?.name}
-          cor="text-lime-400"
-        />
+        {resumo.tempoPrivado ? (
+          <>
+            <Estatistica rotulo="Horas totais" valor="🔒" detalhe="TEMPO DE JOGO ESCONDIDO" cor="text-amber-400" />
+            <Estatistica rotulo="Nunca abertos" valor="🔒" detalhe="TEMPO DE JOGO ESCONDIDO" cor="text-red-400" />
+            <Estatistica rotulo="Maior vício" valor="🔒" detalhe="TEMPO DE JOGO ESCONDIDO" cor="text-lime-400" />
+          </>
+        ) : (
+          <>
+            <Estatistica rotulo="Horas totais" valor={formatarHoras(resumo.totalMinutos, 0)} cor="text-amber-400" />
+            <Estatistica
+              rotulo="Nunca abertos"
+              valor={resumo.nuncaAbertos}
+              detalhe={`${porcentagemNunca}% DA BIBLIOTECA`}
+              cor="text-red-400"
+            />
+            <Estatistica
+              rotulo="Maior vício"
+              valor={resumo.maisJogado ? formatarHoras(resumo.maisJogado.playtime_forever, 0) : '—'}
+              detalhe={resumo.maisJogado?.name}
+              cor="text-lime-400"
+            />
+          </>
+        )}
       </div>
+
+      {resumo.tempoPrivado && (
+        <p className="text-xs font-black uppercase text-amber-400 bg-zinc-950 border-4 border-amber-400 p-3">
+          🔒 ESSA CONTA ESCONDE O TEMPO DE JOGO. PARA VER AS HORAS: STEAM &gt; PRIVACIDADE &gt; DESMARCAR "MANTER MEU TEMPO DE JOGO SEMPRE PRIVADO".
+        </p>
+      )}
     </div>
   );
 };

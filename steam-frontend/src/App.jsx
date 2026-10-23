@@ -276,6 +276,7 @@ function App() {
               precos={precos}
               onGameClick={clicarNoJogo}
               ocupado={isChatting}
+              tempoPrivado={resumo.tempoPrivado}
             />
           )}
 
