@@ -1,7 +1,7 @@
 {
   "name": "steam-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend do SteamBB Dash: dados da Steam Web API e a IA sarcástica SteamBB (Groq)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
