@@ -1,0 +1,19 @@
+# O plano grátis do Render "dorme" após 15 min sem uso e a primeira visita espera ~1 min.
+# Este robô acessa o backend a cada 10 minutos para mantê-lo acordado.
+# (Um único serviço ligado 24h cabe nas 750h/mês grátis do Render.)
+# Para algo mais pontual, use também um monitor no UptimeRobot (veja o README).
+name: Manter backend acordado
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acessar /api/status
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'https://steam-backend-w5j7.onrender.com' }}
+        run: curl --fail --silent --show-error --max-time 90 --retry 2 "$BACKEND_URL/api/status"

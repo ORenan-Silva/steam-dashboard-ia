@@ -4,6 +4,30 @@ import { conversarComIA } from '../lib/api';
 const MENSAGEM_INICIAL = 'SISTEMA INICIADO. AQUI É A STEAM_BB. O QUE VOCÊ QUER SABER DA SUA CONTA?';
 const MENSAGEM_RESET = 'SISTEMA RESETADO. MEMÓRIA DA STEAM_BB LIMPA. O QUE VOCÊ QUER AGORA?';
 
+// A conversa fica salva no navegador para não sumir ao recarregar a página
+const CHAVE_CONVERSA = 'steambb-conversa';
+const MAX_MENSAGENS_SALVAS = 50;
+
+const carregarConversa = () => {
+  try {
+    const salvas = JSON.parse(localStorage.getItem(CHAVE_CONVERSA));
+    const valida = Array.isArray(salvas) && salvas.length > 0 &&
+      salvas.every(m => (m?.role === 'ai' || m?.role === 'user') && typeof m.text === 'string');
+    if (valida) return salvas;
+  } catch {
+    // localStorage bloqueado (aba anônima) ou conteúdo corrompido: começa do zero
+  }
+  return [{ role: 'ai', text: MENSAGEM_INICIAL }];
+};
+
+const salvarConversa = (mensagens) => {
+  try {
+    localStorage.setItem(CHAVE_CONVERSA, JSON.stringify(mensagens.slice(-MAX_MENSAGENS_SALVAS)));
+  } catch {
+    // Sem armazenamento disponível: a conversa só não sobrevive ao recarregar
+  }
+};
+
 // Converte as mensagens da tela no histórico que vai para a IA (sem a saudação e sem erros)
 const paraHistorico = (mensagens) => mensagens
   .slice(1)
@@ -11,7 +35,7 @@ const paraHistorico = (mensagens) => mensagens
   .map(msg => ({ role: msg.role === 'ai' ? 'assistant' : 'user', content: msg.text }));
 
 export function useChat() {
-  const [messages, setMessages] = useState([{ role: 'ai', text: MENSAGEM_INICIAL }]);
+  const [messages, setMessages] = useState(carregarConversa);
   const [isChatting, setIsChatting] = useState(false);
   const messagesRef = useRef(messages);
   const ocupadoRef = useRef(false);
@@ -20,6 +44,11 @@ export function useChat() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Salva só quando a IA termina de falar (e não a cada pedaço do streaming)
+  useEffect(() => {
+    if (!isChatting) salvarConversa(messages);
+  }, [messages, isChatting]);
 
   const atualizarUltima = (alterar) =>
     setMessages(prev => [...prev.slice(0, -1), alterar(prev[prev.length - 1])]);

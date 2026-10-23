@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PainelBusca from './components/PainelBusca';
 import CartaoPerfil from './components/CartaoPerfil';
+import Recentes from './components/Recentes';
+import QuasePlatinados from './components/QuasePlatinados';
 import ValorDaConta from './components/ValorDaConta';
+import Duelo from './components/Duelo';
 import Biblioteca from './components/Biblioteca';
 import Terminal from './components/Terminal';
 import { getJson, postJson } from './lib/api';
@@ -14,24 +17,47 @@ const CALCULO_INICIAL = { estado: 'parado', progresso: 0, falharam: 0 };
 
 // Link compartilhável: usa o nome personalizado do perfil quando existe, senão o SteamID64
 const idParaLink = (perfil) => perfil.profileurl?.match(/\/id\/([^/]+)/)?.[1] || perfil.steamid;
-const idDaUrl = () => new URLSearchParams(window.location.search).get('id') || '';
+const parametroDaUrl = (nome) => new URLSearchParams(window.location.search).get(nome) || '';
+
+const atualizarUrl = (perfil, perfilRival) => {
+  const params = new URLSearchParams({ id: idParaLink(perfil) });
+  if (perfilRival) params.set('vs', idParaLink(perfilRival));
+  window.history.replaceState(null, '', `?${params}`);
+};
+
+// Descobre o SteamID64 a partir do que foi digitado e busca perfil e biblioteca juntos
+const buscarPerfilCompleto = async (texto) => {
+  const { steamId } = await getJson(`/api/resolve?q=${encodeURIComponent(texto)}`);
+  const [profile, biblioteca] = await Promise.all([
+    getJson(`/api/profile/${steamId}`),
+    getJson(`/api/games/${steamId}`),
+  ]);
+  return { steamId, profile, games: biblioteca.games || [] };
+};
+
+const mensagemDeErro = (err) => (err.message.startsWith('ERRO') ? err.message : `ERRO: ${err.message}`);
 
 function App() {
-  const [busca, setBusca] = useState(idDaUrl);
+  const [busca, setBusca] = useState(() => parametroDaUrl('id'));
   const [steamId, setSteamId] = useState('');
   const [profile, setProfile] = useState(null);
   const [games, setGames] = useState([]);
-  const [loading, setLoading] = useState(() => idDaUrl() !== '');
+  const [recentes, setRecentes] = useState([]);
+  const [loading, setLoading] = useState(() => parametroDaUrl('id') !== '');
   const [error, setError] = useState('');
 
   const [precos, setPrecos] = useState({});
   const [calculo, setCalculo] = useState(CALCULO_INICIAL);
 
-  const [terminalAberto, setTerminalAberto] = useState(false);
-  const [mensagensVistas, setMensagensVistas] = useState(1);
+  const [rival, setRival] = useState(null);
+  const [carregandoRival, setCarregandoRival] = useState(false);
+  const [erroRival, setErroRival] = useState('');
 
   const statusServidor = useStatusServidor();
   const { messages, isChatting, enviar, resetar } = useChat();
+
+  const [terminalAberto, setTerminalAberto] = useState(false);
+  const [mensagensVistas, setMensagensVistas] = useState(() => messages.length);
 
   // Cada busca ganha um número; um cálculo de valor antigo para se o perfil mudar no meio
   const buscaAtualRef = useRef(0);
@@ -47,45 +73,82 @@ function App() {
     setError('');
     setProfile(null);
     setGames([]);
+    setRecentes([]);
     setSteamId('');
     setPrecos({});
     setCalculo(CALCULO_INICIAL);
+    setRival(null);
+    setErroRival('');
     carregarPerfil(texto);
   };
 
   // Só mexe no estado depois das respostas, então pode ser chamada direto ao abrir a página
-  const carregarPerfil = async (texto) => {
+  const carregarPerfil = async (texto, textoRival = '') => {
     const numeroDaBusca = ++buscaAtualRef.current;
     try {
-      const { steamId: id } = await getJson(`/api/resolve?q=${encodeURIComponent(texto)}`);
-      const [perfil, biblioteca] = await Promise.all([
-        getJson(`/api/profile/${id}`),
-        getJson(`/api/games/${id}`),
-      ]);
+      const dados = await buscarPerfilCompleto(texto);
       if (numeroDaBusca !== buscaAtualRef.current) return;
 
-      const listaDeJogos = biblioteca.games || [];
-      setSteamId(id);
-      setProfile(perfil);
-      setGames(listaDeJogos);
-      window.history.replaceState(null, '', `?id=${encodeURIComponent(idParaLink(perfil))}`);
+      setSteamId(dados.steamId);
+      setProfile(dados.profile);
+      setGames(dados.games);
+      atualizarUrl(dados.profile);
 
       // Perfil público com biblioteca privada: a Steam responde sem a lista de jogos
-      if (listaDeJogos.length === 0) {
+      if (dados.games.length === 0) {
         setError('AVISO: Biblioteca vazia ou privada. Em Steam > Privacidade, deixe "Detalhes do jogo" como Público.');
       }
+
+      getJson(`/api/recent/${dados.steamId}`)
+        .then(r => numeroDaBusca === buscaAtualRef.current && setRecentes(r.games))
+        .catch(() => {});
+
+      if (textoRival) carregarRival(textoRival, dados);
     } catch (err) {
       if (numeroDaBusca !== buscaAtualRef.current) return;
-      setError(err.message.startsWith('ERRO') ? err.message : `ERRO: ${err.message}`);
+      setError(mensagemDeErro(err));
     } finally {
       if (numeroDaBusca === buscaAtualRef.current) setLoading(false);
     }
   };
 
-  // Link compartilhado (?id=...): carrega o perfil assim que a página abre
+  const carregarRival = async (texto, desafiante = { steamId, profile }) => {
+    if (!texto.trim()) return;
+    const numeroDaBusca = buscaAtualRef.current;
+    setCarregandoRival(true);
+    setErroRival('');
+    try {
+      const dados = await buscarPerfilCompleto(texto.trim());
+      if (numeroDaBusca !== buscaAtualRef.current) return;
+      if (dados.steamId === desafiante.steamId) {
+        setErroRival('ERRO: Duelar contra você mesmo? Até a SteamBB tem limites.');
+        return;
+      }
+      if (dados.games.length === 0) {
+        setErroRival('ERRO: A biblioteca desse amigo é privada. Covarde.');
+        return;
+      }
+      setRival({ ...dados, totalJogos: dados.games.length, resumo: resumirBiblioteca(dados.games) });
+      atualizarUrl(desafiante.profile, dados.profile);
+    } catch (err) {
+      if (numeroDaBusca === buscaAtualRef.current) setErroRival(mensagemDeErro(err));
+    } finally {
+      if (numeroDaBusca === buscaAtualRef.current) setCarregandoRival(false);
+    }
+  };
+
+  const trocarRival = () => {
+    setRival(null);
+    setErroRival('');
+    atualizarUrl(profile);
+  };
+
+  // Link compartilhado (?id=...&vs=...): carrega os perfis assim que a página abre
   useEffect(() => {
-    const id = idDaUrl();
-    if (id) carregarPerfil(id);
+    const id = parametroDaUrl('id');
+    if (id) carregarPerfil(id, parametroDaUrl('vs'));
+    // Roda uma vez só, ao abrir a página
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const calcularValor = async () => {
@@ -138,6 +201,16 @@ function App() {
     });
   };
 
+  const pedirVeredito = () => {
+    if (isChatting || !rival) return;
+    abrirTerminal();
+    enviar({
+      textoVisivel: `[ DUELO ]: ${profile.personaname} VS ${rival.profile.personaname}`,
+      steamId,
+      event: { type: 'duel', rivalId: rival.steamId },
+    });
+  };
+
   const perguntar = (texto) => enviar({ textoVisivel: texto, steamId });
 
   // No celular o terminal é uma tela por cima; o botão flutuante avisa quando chega resposta nova
@@ -150,6 +223,8 @@ function App() {
     setMensagensVistas(messages.length);
   };
   const temNovidade = !terminalAberto && messages.length > mensagensVistas;
+
+  const temBiblioteca = profile && games.length > 0;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-mono p-4 md:p-8 selection:bg-fuchsia-500 selection:text-white">
@@ -170,8 +245,28 @@ function App() {
             <CartaoPerfil profile={profile} totalJogos={games.length} resumo={resumo} />
           )}
 
-          {profile && games.length > 0 && (
+          {temBiblioteca && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <Recentes recentes={recentes} onGameClick={clicarNoJogo} ocupado={isChatting} />
+              <QuasePlatinados key={steamId} steamId={steamId} onGameClick={clicarNoJogo} ocupado={isChatting} />
+            </div>
+          )}
+
+          {temBiblioteca && (
             <ValorDaConta calculo={calculo} valores={valores} onCalcular={calcularValor} />
+          )}
+
+          {temBiblioteca && (
+            <Duelo
+              desafiante={{ profile, totalJogos: games.length, resumo }}
+              rival={rival}
+              carregando={carregandoRival}
+              erro={erroRival}
+              onDesafiar={(texto) => carregarRival(texto)}
+              onTrocar={trocarRival}
+              onVeredito={pedirVeredito}
+              ocupado={isChatting}
+            />
           )}
 
           {games.length > 0 && (

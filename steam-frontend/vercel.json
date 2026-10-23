@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|Discordbot|Twitterbot|facebookexternalhit|Facebot|TelegramBot|Slackbot|LinkedInBot|SkypeUriPreview|redditbot|Embedly).*"
+        }
+      ],
+      "destination": "/api/compartilhar"
+    }
+  ]
+}

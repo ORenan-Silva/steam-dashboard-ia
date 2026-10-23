@@ -10,7 +10,7 @@ const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const axios = require('axios');
-const { app, cachePrecos, cacheJogos } = require('../server');
+const { app, cachePrecos, cacheJogos, cacheRecentes, cacheQuasePlatinados } = require('../server');
 
 const STEAM_ID = '76561197960435530';
 const JOGOS = [
@@ -24,6 +24,7 @@ let base;
 let chamadasGet;
 let respostaGet;
 let ultimoPost;
+let posts;
 let respostaPost;
 let ipDoTeste = 0;
 
@@ -45,6 +46,7 @@ before(async () => {
     };
     axios.post = async (url, body, config) => {
         ultimoPost = { url, body, config };
+        posts.push(body);
         return respostaPost(url, body, config);
     };
     await new Promise(resolve => { servidor = app.listen(0, resolve); });
@@ -56,8 +58,11 @@ after(() => servidor.close());
 beforeEach(() => {
     chamadasGet = [];
     ultimoPost = undefined;
+    posts = [];
     cachePrecos.clear();
     cacheJogos.clear();
+    cacheRecentes.clear();
+    cacheQuasePlatinados.clear();
     respostaGet = (url) => {
         if (url.includes('GetOwnedGames')) return { data: { response: { game_count: JOGOS.length, games: JOGOS } } };
         throw erroHttp(404);
@@ -251,4 +256,130 @@ test('JSON quebrado devolve 400 em JSON, sem stack trace', async () => {
     const res = await pedir('/api/chat', { method: 'POST', body: '{quebrado' });
     assert.equal(res.status, 400);
     assert.deepEqual(await res.json(), { error: 'JSON inválido.' });
+});
+
+// ---------- IA: modelo reserva e recusas ----------
+
+const RIVAL_ID = '76561197960435531';
+const comConteudo = (texto) => async () => ({ data: streamDoGroq([linhaSSE(texto), 'data: [DONE]\n\n']) });
+const perguntar = (corpo = { messages: [{ role: 'user', content: 'oi' }] }) =>
+    pedir('/api/chat', { method: 'POST', body: JSON.stringify(corpo) });
+
+test('Groq lotado (429) no modelo principal: o modelo reserva responde', async () => {
+    respostaPost = async (url, body) => {
+        if (body.model === 'openai/gpt-oss-120b') throw erroHttp(429);
+        return comConteudo('Resposta do reserva.')();
+    };
+    const res = await perguntar();
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), 'Resposta do reserva.');
+    assert.deepEqual(posts.map(p => p.model), ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']);
+});
+
+test('modelo removido pelo Groq (404) também cai para o reserva', async () => {
+    respostaPost = async (url, body) => {
+        if (body.model === 'openai/gpt-oss-120b') throw erroHttp(404);
+        return comConteudo('Ainda estou viva.')();
+    };
+    const res = await perguntar();
+    assert.equal(await res.text(), 'Ainda estou viva.');
+});
+
+test('recusa da IA é descartada e outra tentativa responde', async () => {
+    respostaPost = async (url, body) => comConteudo(
+        body.model === 'openai/gpt-oss-120b' ? 'Desculpe, não posso atender a esse pedido.' : 'Zoeira liberada.'
+    )();
+    const res = await perguntar();
+    assert.equal(await res.text(), 'Zoeira liberada.');
+    assert.equal(posts.length, 2);
+});
+
+test('se todas as tentativas recusarem, a última resposta é mostrada', async () => {
+    respostaPost = comConteudo('Desculpe, não posso.');
+    const res = await perguntar();
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), 'Desculpe, não posso.');
+});
+
+test('resposta longa passa direto, mesmo começando parecido com recusa', async () => {
+    const longa = 'Desculpe, mas ' + 'você joga demais. '.repeat(20);
+    respostaPost = comConteudo(longa);
+    const res = await perguntar();
+    assert.equal(await res.text(), longa);
+    assert.equal(posts.length, 1);
+});
+
+// ---------- Recentes, quase platinados e duelo ----------
+
+test('jogos recentes vêm ordenados pelas horas das últimas 2 semanas e entram no contexto da IA', async () => {
+    respostaGet = (url) => {
+        if (url.includes('GetRecentlyPlayedGames')) {
+            return { data: { response: { games: [
+                { appid: 30, name: 'Elden Ring', playtime_2weeks: 60, playtime_forever: 60, img_icon_url: 'x' },
+                { appid: 10, name: 'Counter-Strike', playtime_2weeks: 600, playtime_forever: 90000 },
+            ] } } };
+        }
+        if (url.includes('GetOwnedGames')) return { data: { response: { games: JOGOS } } };
+        throw erroHttp(404);
+    };
+    const res = await pedir(`/api/recent/${STEAM_ID}`);
+    const { games } = await res.json();
+    assert.deepEqual(games.map(g => g.name), ['Counter-Strike', 'Elden Ring']);
+    assert.equal(games[0].img_icon_url, undefined);
+
+    const chat = await perguntar({ steamId: STEAM_ID, messages: [{ role: 'user', content: 'oi' }] });
+    await chat.text();
+    assert.match(posts[0].messages[0].content, /últimas 2 semanas: Counter-Strike \(10\.0h\), Elden Ring \(1\.0h\)/);
+});
+
+test('quase platinados: separa platinados, ignora jogos sem conquistas e ordena por quantas faltam', async () => {
+    const progresso = { 10: [9, 10], 30: [10, 10] };
+    let chamadas = 0;
+    respostaGet = (url, params) => {
+        if (url.includes('GetOwnedGames')) return { data: { response: { games: JOGOS } } };
+        if (url.includes('GetPlayerAchievements')) {
+            chamadas++;
+            const p = progresso[params.appid];
+            if (!p) throw erroHttp(400);
+            return { data: { playerstats: { achievements: Array.from({ length: p[1] }, (_, i) => ({ achieved: i < p[0] ? 1 : 0 })) } } };
+        }
+        throw erroHttp(404);
+    };
+    const res = await pedir(`/api/almost/${STEAM_ID}`);
+    const dados = await res.json();
+    assert.equal(dados.analisados, 2);
+    assert.equal(dados.platinados, 1);
+    assert.deepEqual(dados.quase.map(q => [q.name, q.feitas, q.total]), [['Counter-Strike', 9, 10]]);
+    // Stardew (0h) nem é consultado
+    assert.equal(chamadas, 2);
+
+    await pedir(`/api/almost/${STEAM_ID}`);
+    assert.equal(chamadas, 2, 'segunda varredura vem do cache');
+});
+
+test('duelo: o prompt compara os dois perfis e pede o veredito', async () => {
+    respostaGet = (url, params) => {
+        if (url.includes('GetOwnedGames')) {
+            return { data: { response: { games: params.steamid === RIVAL_ID ? [{ appid: 99, name: 'Euro Truck Simulator 2', playtime_forever: 30000 }] : JOGOS } } };
+        }
+        if (url.includes('GetPlayerSummaries')) {
+            assert.equal(params.steamids, `${STEAM_ID},${RIVAL_ID}`);
+            return { data: { response: { players: [{ steamid: STEAM_ID, personaname: 'Renan' }, { steamid: RIVAL_ID, personaname: 'Amigo' }] } } };
+        }
+        throw erroHttp(404);
+    };
+    const res = await perguntar({ steamId: STEAM_ID, messages: [], event: { type: 'duel', rivalId: RIVAL_ID } });
+    assert.equal(res.status, 200);
+    await res.text();
+    const prompt = posts[0].messages.at(-1).content;
+    assert.match(prompt, /- Renan: 3 jogos, 1501\.0h jogadas, 1 jogos nunca abertos \(33% da biblioteca\)/);
+    assert.match(prompt, /- Amigo: 1 jogos, 500\.0h jogadas.*Maior vício: Euro Truck Simulator 2/);
+    assert.match(prompt, /VEREDITO: <nome> PERDEU/);
+});
+
+test('duelo contra si mesmo ou sem rival válido devolve 400', async () => {
+    for (const rivalId of [STEAM_ID, 'abc', undefined]) {
+        const res = await perguntar({ steamId: STEAM_ID, event: { type: 'duel', rivalId } });
+        assert.equal(res.status, 400, String(rivalId));
+    }
 });

@@ -1,0 +1,58 @@
+import { describe, expect, test } from 'vitest';
+import { formatarHoras, formatarReais, resumirBiblioteca, somarValores } from './biblioteca';
+
+const JOGOS = [
+  { appid: 1, name: 'Counter-Strike', playtime_forever: 90000 },
+  { appid: 2, name: 'Stardew Valley', playtime_forever: 0 },
+  { appid: 3, name: 'Elden Ring', playtime_forever: 60 },
+  { appid: 4, name: 'Jogo Grátis', playtime_forever: 0 },
+];
+
+describe('formatação', () => {
+  test('horas no padrão brasileiro, com e sem casas decimais', () => {
+    expect(formatarHoras(90000)).toBe('1.500,0H');
+    expect(formatarHoras(90000, 0)).toBe('1.500H');
+    expect(formatarHoras(45)).toBe('0,8H');
+  });
+
+  test('reais com separador de milhar e vírgula', () => {
+    expect(formatarReais(24324.76)).toBe('R$ 24.324,76');
+    expect(formatarReais(0)).toBe('R$ 0,00');
+  });
+});
+
+describe('resumirBiblioteca', () => {
+  test('soma as horas, conta os nunca abertos e acha o maior vício', () => {
+    const resumo = resumirBiblioteca(JOGOS);
+    expect(resumo.totalMinutos).toBe(90060);
+    expect(resumo.nuncaAbertos).toBe(2);
+    expect(resumo.maisJogado.name).toBe('Counter-Strike');
+  });
+
+  test('biblioteca vazia não quebra', () => {
+    expect(resumirBiblioteca([])).toEqual({ totalMinutos: 0, nuncaAbertos: 0, maisJogado: null });
+  });
+});
+
+describe('somarValores', () => {
+  test('calcula total, dinheiro jogado fora e os mais caros', () => {
+    const precos = {
+      1: { cheio: 0, atual: 0 },
+      2: { cheio: 49.99, atual: 24.99 },
+      3: { cheio: 229.9, atual: 229.9 },
+      4: { cheio: 0, atual: 0 },
+    };
+    const valores = somarValores(JOGOS, precos);
+    expect(valores.total).toBeCloseTo(279.89);
+    expect(valores.desperdicio).toBeCloseTo(49.99);
+    // Jogo grátis nunca aberto não conta como dinheiro jogado fora
+    expect(valores.pagosNuncaAbertos).toBe(1);
+    expect(valores.maisCaros.map(g => g.name)).toEqual(['Elden Ring', 'Stardew Valley']);
+  });
+
+  test('ignora jogos ainda sem preço consultado', () => {
+    const valores = somarValores(JOGOS, { 3: { cheio: 100, atual: 100 } });
+    expect(valores.total).toBe(100);
+    expect(valores.desperdicio).toBe(0);
+  });
+});

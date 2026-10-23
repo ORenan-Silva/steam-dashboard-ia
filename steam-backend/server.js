@@ -24,9 +24,17 @@ const STEAM_API = 'https://api.steampowered.com';
 const STORE_API = 'https://store.steampowered.com/api/appdetails';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Modelo da IA no Groq. Configurável porque o Groq aposenta modelos com frequência
-// (o llama-3.1-8b-instant foi removido). Lista atual: https://console.groq.com/docs/models
-const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+// Modelos da IA no Groq, em ordem de preferência. Configuráveis porque o Groq aposenta modelos
+// com frequência (o llama-3.1-8b-instant foi removido). Lista atual: https://console.groq.com/docs/models
+// O limite de tokens por minuto do Groq é separado por modelo: quando o principal lota, o reserva assume.
+const GROQ_MODELS = [
+    process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+    process.env.GROQ_FALLBACK_MODEL || 'openai/gpt-oss-20b'
+].filter((modelo, i, lista) => modelo && lista.indexOf(modelo) === i);
+
+// Respostas curtas que começam assim são a IA se recusando a responder
+const RECUSA = /^\W*(desculp|sinto muito|lamento|infelizmente,? n[ãa]o|n[ãa]o posso|i'?m sorry|sorry|i can'?t)/i;
+const TAMANHO_MAX_RECUSA = 200;
 
 // Limites para não estourar a cota grátis do Groq (8.000 tokens/minuto)
 const MAX_CONTEXT_CHARS = 6000;
@@ -73,6 +81,8 @@ const criarCache = (validadeMs, maxItens) => {
 
 const cachePrecos = criarCache(12 * 60 * 60 * 1000, 50000);
 const cacheJogos = criarCache(10 * 60 * 1000, 1000);
+const cacheRecentes = criarCache(10 * 60 * 1000, 1000);
+const cacheQuasePlatinados = criarCache(30 * 60 * 1000, 500);
 
 // Limites de uso por IP
 const responderLimite = (mensagem) => (req, res) => res.status(429).json({ error: mensagem });
@@ -127,6 +137,83 @@ const buscarJogos = async (steamId) => {
     // Biblioteca vazia geralmente é privada: não guarda, para a pessoa poder abrir e tentar de novo
     if (jogos.length > 0) cacheJogos.set(steamId, jogos);
     return jogos;
+};
+
+// Jogos abertos nas últimas 2 semanas (playtime_2weeks em minutos)
+const buscarRecentes = async (steamId) => {
+    const emCache = cacheRecentes.get(steamId);
+    if (emCache) return emCache;
+
+    const { data } = await axios.get(`${STEAM_API}/IPlayerService/GetRecentlyPlayedGames/v0001/`, {
+        params: { key: API_KEY, steamid: steamId, count: 0 }
+    });
+    const recentes = (data.response?.games || [])
+        .map(({ appid, name, playtime_2weeks, playtime_forever }) => ({ appid, name, playtime_2weeks, playtime_forever }))
+        .sort((a, b) => b.playtime_2weeks - a.playtime_2weeks);
+    cacheRecentes.set(steamId, recentes);
+    return recentes;
+};
+
+const buscarPerfis = async (steamIds) => {
+    const { data } = await axios.get(`${STEAM_API}/ISteamUser/GetPlayerSummaries/v0002/`, {
+        params: { key: API_KEY, steamids: steamIds.join(',') }
+    });
+    return data.response?.players || [];
+};
+
+// Executa as tarefas com no máximo "limite" rodando ao mesmo tempo (para não martelar a Steam)
+const emParalelo = async (itens, limite, tarefa) => {
+    const resultados = new Array(itens.length);
+    let proximo = 0;
+    const trabalhador = async () => {
+        while (proximo < itens.length) {
+            const i = proximo++;
+            resultados[i] = await tarefa(itens[i]);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, trabalhador));
+    return resultados;
+};
+
+// Varre as conquistas dos jogos mais jogados e separa os que estão perto dos 100%
+const QUASE_JOGOS_ANALISADOS = 30;
+const QUASE_PORCENTAGEM_MINIMA = 0.6;
+
+const buscarQuasePlatinados = async (steamId) => {
+    const emCache = cacheQuasePlatinados.get(steamId);
+    if (emCache) return emCache;
+
+    const jogos = (await buscarJogos(steamId))
+        .filter(j => j.playtime_forever > 0)
+        .sort((a, b) => b.playtime_forever - a.playtime_forever)
+        .slice(0, QUASE_JOGOS_ANALISADOS);
+
+    const progresso = await emParalelo(jogos, 6, async (jogo) => {
+        try {
+            const { data } = await axios.get(`${STEAM_API}/ISteamUserStats/GetPlayerAchievements/v0001/`, {
+                params: { appid: jogo.appid, key: API_KEY, steamid: steamId }
+            });
+            const conquistas = data.playerstats?.achievements || [];
+            if (conquistas.length === 0) return null;
+            const feitas = conquistas.filter(c => c.achieved === 1).length;
+            return { appid: jogo.appid, name: jogo.name, playtime_forever: jogo.playtime_forever, feitas, total: conquistas.length };
+        } catch {
+            // Jogo sem conquistas ou com estatísticas privadas
+            return null;
+        }
+    });
+
+    const comConquistas = progresso.filter(Boolean);
+    const resultado = {
+        analisados: comConquistas.length,
+        platinados: comConquistas.filter(p => p.feitas === p.total).length,
+        quase: comConquistas
+            .filter(p => p.feitas < p.total && p.feitas / p.total >= QUASE_PORCENTAGEM_MINIMA)
+            .sort((a, b) => (a.total - a.feitas) - (b.total - b.feitas) || b.feitas / b.total - a.feitas / a.total)
+            .slice(0, 8)
+    };
+    cacheQuasePlatinados.set(steamId, resultado);
+    return resultado;
 };
 
 // Conquistas do jogador com nomes e descrições reais em português do Brasil
@@ -226,24 +313,48 @@ const buscarPrecos = async (appIds) => {
 
 // Resumo da biblioteca enviado para a IA. Mandar a lista inteira estoura o limite grátis
 // do Groq em bibliotecas com mais de ~400 jogos.
-const montarContexto = (jogos) => {
+const resumirJogos = (jogos) => {
+    const porHoras = [...jogos].sort((a, b) => b.playtime_forever - a.playtime_forever);
+    return {
+        porHoras,
+        nuncaJogados: porHoras.filter(j => j.playtime_forever === 0),
+        totalMinutos: jogos.reduce((soma, j) => soma + j.playtime_forever, 0),
+    };
+};
+
+const montarContexto = (jogos, recentes = []) => {
     if (jogos.length === 0) return 'Nenhum perfil carregado.';
 
-    const porHoras = [...jogos].sort((a, b) => b.playtime_forever - a.playtime_forever);
-    const nuncaJogados = porHoras.filter(j => j.playtime_forever === 0);
-    const totalMinutos = jogos.reduce((soma, j) => soma + j.playtime_forever, 0);
-
+    const { porHoras, nuncaJogados, totalMinutos } = resumirJogos(jogos);
     const maisJogados = porHoras
         .filter(j => j.playtime_forever > 0)
         .slice(0, 40)
         .map(j => `${j.name} (${formatarHoras(j.playtime_forever)})`)
         .join(', ');
     const amostraNuncaJogados = nuncaJogados.slice(0, 20).map(j => j.name).join(', ');
+    const ultimasSemanas = recentes.map(j => `${j.name} (${formatarHoras(j.playtime_2weeks)})`).join(', ');
 
     return `Total: ${jogos.length} jogos, ${formatarHoras(totalMinutos)} jogadas no total, ${nuncaJogados.length} jogos NUNCA abertos.
+    Jogados nas últimas 2 semanas: ${ultimasSemanas || 'nenhum (não abriu a Steam nas últimas 2 semanas)'}.
     Mais jogados: ${maisJogados || 'nenhum'}.
     Alguns que ele comprou e nunca abriu: ${amostraNuncaJogados || 'nenhum'}.`.slice(0, MAX_CONTEXT_CHARS);
 };
+
+const fichaDoDuelo = (nome, jogos) => {
+    const { porHoras, nuncaJogados, totalMinutos } = resumirJogos(jogos);
+    const vicio = porHoras[0];
+    const porcentagem = jogos.length ? Math.round((nuncaJogados.length / jogos.length) * 100) : 0;
+    return `- ${nome}: ${jogos.length} jogos, ${formatarHoras(totalMinutos)} jogadas, ${nuncaJogados.length} jogos nunca abertos (${porcentagem}% da biblioteca). Maior vício: ${vicio ? `${vicio.name} (${formatarHoras(vicio.playtime_forever)})` : 'nenhum'}. Top 5: ${porHoras.slice(0, 5).map(j => j.name).join(', ') || 'nenhum'}.`;
+};
+
+const promptDoDuelo = (desafiante, rival) => `Você é a SteamBB. O usuário desafiou um amigo para um DUELO de bibliotecas Steam, e os dois querem ser zoados.
+    ${fichaDoDuelo(desafiante.nome, desafiante.jogos)}
+    ${fichaDoDuelo(rival.nome, rival.jogos)}
+
+    Sua tarefa: Compare os dois como um juiz de stand-up debochado. Zoe os hábitos de jogo de cada um (acumular jogos sem abrir, horas demais no mesmo jogo, gosto duvidoso).
+    No final, declare em uma linha separada quem é o PIOR GAMER do duelo, no formato: "VEREDITO: <nome> PERDEU."
+    Zoe só os hábitos de jogo, nunca a aparência ou a vida pessoal. Seja curta, no máximo um parágrafo antes do veredito.
+    REGRA MÁXIMA: Responda EXCLUSIVAMENTE em Português do Brasil.`;
 
 const promptDoSistema = (contexto) => `Você é a "SteamBB" (uma homenagem ao banco de dados SteamDB), uma IA não-oficial rodando num terminal Cyberpunk Dark Neo-Brutalista.
     Sua personalidade é ríspida, sarcástica, ácida e você é uma especialista veterana em jogos da Steam.
@@ -402,7 +513,35 @@ app.get('/api/achievements/:steamId/:appId', async (req, res) => {
     res.json({ achievements });
 });
 
-// 6. Rota de Preços em Lote (com cache e AUTO-RETRY PARA RATE LIMIT)
+// 6. Rota dos Jogos das Últimas 2 Semanas
+app.get('/api/recent/:steamId', async (req, res) => {
+    try {
+        const { steamId } = req.params;
+        if (!isValidSteamId(steamId)) {
+            return res.status(400).json({ error: 'SteamID64 inválido.' });
+        }
+        res.json({ games: await buscarRecentes(steamId) });
+    } catch (error) {
+        console.error('Erro ao buscar jogos recentes:', error.message);
+        res.status(500).json({ error: 'Erro interno no servidor ao buscar jogos recentes.' });
+    }
+});
+
+// 7. Rota dos Quase Platinados (varre as conquistas dos jogos mais jogados)
+app.get('/api/almost/:steamId', async (req, res) => {
+    try {
+        const { steamId } = req.params;
+        if (!isValidSteamId(steamId)) {
+            return res.status(400).json({ error: 'SteamID64 inválido.' });
+        }
+        res.json(await buscarQuasePlatinados(steamId));
+    } catch (error) {
+        console.error('Erro ao buscar quase platinados:', error.message);
+        res.status(500).json({ error: 'Erro interno no servidor ao buscar conquistas.' });
+    }
+});
+
+// 8. Rota de Preços em Lote (com cache e AUTO-RETRY PARA RATE LIMIT)
 app.post('/api/prices', async (req, res) => {
     const { appIds } = req.body || {};
     if (!Array.isArray(appIds)) {
@@ -412,7 +551,106 @@ app.post('/api/prices', async (req, res) => {
     res.json(await buscarPrecos(ids));
 });
 
-// 7. ROTA DE IA (STEAM_BB via GROQ, resposta em streaming)
+const abrirStreamDoGroq = async (modelo, mensagens, signal) => {
+    const { data } = await axios.post(GROQ_URL, {
+        model: modelo,
+        messages: mensagens,
+        temperature: 0.7,
+        max_tokens: 1024,
+        stream: true,
+        // Os modelos gpt-oss "pensam" antes de responder; esforço baixo = resposta rápida
+        ...(modelo.startsWith('openai/gpt-oss') && { reasoning_effort: 'low' })
+    }, {
+        headers: {
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+        },
+        responseType: 'stream',
+        signal
+    });
+    return data;
+};
+
+// Transforma o streaming do Groq (linhas "data: {...}") em pedaços de texto
+async function* textoDoStream(stream) {
+    stream.setEncoding('utf8');
+    let buffer = '';
+    for await (const chunk of stream) {
+        buffer += chunk;
+        const linhas = buffer.split('\n');
+        buffer = linhas.pop();
+        for (const linha of linhas) {
+            const texto = lerLinhaDoStream(linha);
+            if (texto) yield texto;
+        }
+    }
+}
+
+const iniciarResposta = (res) => {
+    if (res.headersSent) return;
+    res.set({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no'
+    });
+    res.flushHeaders();
+};
+
+// Tenta os modelos em ordem. Troca de modelo se o Groq der erro (limite, modelo removido) ou se a
+// IA recusar. Para detectar a recusa, o começo da resposta fica guardado até passar de
+// TAMANHO_MAX_RECUSA caracteres; depois disso o texto vai direto para o navegador.
+const responderComIA = async (res, mensagens, signal) => {
+    const tentativas = GROQ_MODELS.length > 1 ? GROQ_MODELS : [GROQ_MODELS[0], GROQ_MODELS[0]];
+    let ultimoErro;
+
+    for (const [indice, modelo] of tentativas.entries()) {
+        const ultimaTentativa = indice === tentativas.length - 1;
+        let guardado = '';
+        let liberado = false;
+
+        try {
+            const stream = await abrirStreamDoGroq(modelo, mensagens, signal);
+            for await (const texto of textoDoStream(stream)) {
+                if (liberado) {
+                    res.write(texto);
+                    continue;
+                }
+                guardado += texto;
+                if (guardado.length > TAMANHO_MAX_RECUSA) {
+                    iniciarResposta(res);
+                    res.write(guardado);
+                    liberado = true;
+                }
+            }
+        } catch (error) {
+            if (signal.aborted) return;
+            if (liberado) {
+                console.error('Streaming do Groq caiu:', error.message);
+                return res.end('\n[ERRO: A CONEXÃO CAIU NO MEIO DA RESPOSTA]');
+            }
+            ultimoErro = error;
+            console.error(`Erro na IA do Groq (${modelo}):`, error.response?.status || error.message);
+            continue;
+        }
+
+        if (liberado) return res.end();
+        if (RECUSA.test(guardado.trim()) && !ultimaTentativa) {
+            console.log(`[STEAM_BB AVISO]: ${modelo} recusou a resposta. Tentando de novo...`);
+            continue;
+        }
+        iniciarResposta(res);
+        return res.end(guardado || 'A STEAM_BB FICOU SEM PALAVRAS. TENTE DE NOVO.');
+    }
+
+    // Nenhum modelo conseguiu nem começar a responder
+    const status = ultimoErro?.response?.status;
+    if (status === 429 || status === 413) {
+        return res.status(429).json({ error: 'A STEAM_BB ESTÁ SOBRECARREGADA (LIMITE DO GROQ). ESPERE UM MINUTO E TENTE DE NOVO.' });
+    }
+    res.status(500).json({ error: 'ERRO: CONEXÃO COM O CÉREBRO DA STEAM_BB PERDIDA.' });
+};
+
+// 9. ROTA DE IA (STEAM_BB via GROQ, resposta em streaming)
 app.post('/api/chat', limiteChat, async (req, res) => {
     const { messages = [], steamId, event } = req.body || {};
 
@@ -431,12 +669,12 @@ app.post('/api/chat', limiteChat, async (req, res) => {
         .slice(-MAX_HISTORY_MESSAGES);
 
     let jogos = [];
+    let recentes = [];
     if (steamId) {
-        try {
-            jogos = await buscarJogos(steamId);
-        } catch (error) {
-            console.error('Erro ao buscar jogos para a IA:', error.message);
-        }
+        const [resultadoJogos, resultadoRecentes] = await Promise.allSettled([buscarJogos(steamId), buscarRecentes(steamId)]);
+        if (resultadoJogos.status === 'fulfilled') jogos = resultadoJogos.value;
+        else console.error('Erro ao buscar jogos para a IA:', resultadoJogos.reason.message);
+        if (resultadoRecentes.status === 'fulfilled') recentes = resultadoRecentes.value;
     }
 
     // Os prompts de zombaria são montados aqui, e não no navegador, para ninguém
@@ -455,6 +693,24 @@ app.post('/api/chat', limiteChat, async (req, res) => {
             return res.status(400).json({ error: 'Valor da conta inválido.' });
         }
         history.push({ role: 'user', content: promptDoValor({ total, desperdicio }) });
+    } else if (event?.type === 'duel') {
+        const rivalId = event.rivalId;
+        if (!steamId || !isValidSteamId(rivalId) || rivalId === steamId) {
+            return res.status(400).json({ error: 'Duelo inválido: escolha outro perfil para desafiar.' });
+        }
+        let perfis;
+        let jogosRival;
+        try {
+            [perfis, jogosRival] = await Promise.all([buscarPerfis([steamId, rivalId]), buscarJogos(rivalId)]);
+        } catch (error) {
+            console.error('Erro ao montar o duelo:', error.message);
+            return res.status(500).json({ error: 'Erro ao buscar os dados do duelo.' });
+        }
+        const nome = (id) => perfis.find(p => p.steamid === id)?.personaname || 'Anônimo';
+        history.push({
+            role: 'user',
+            content: promptDoDuelo({ nome: nome(steamId), jogos }, { nome: nome(rivalId), jogos: jogosRival })
+        });
     } else if (history.length === 0 || history[history.length - 1].role !== 'user') {
         return res.status(400).json({ error: 'Histórico de mensagens vazio.' });
     }
@@ -462,66 +718,8 @@ app.post('/api/chat', limiteChat, async (req, res) => {
     const controller = new AbortController();
     res.on('close', () => controller.abort());
 
-    let groqResponse;
-    try {
-        groqResponse = await axios.post(GROQ_URL, {
-            model: GROQ_MODEL,
-            messages: [{ role: 'system', content: promptDoSistema(montarContexto(jogos)) }, ...history],
-            temperature: 0.7,
-            max_tokens: 1024,
-            stream: true,
-            // Os modelos gpt-oss "pensam" antes de responder; esforço baixo = resposta rápida
-            ...(GROQ_MODEL.startsWith('openai/gpt-oss') && { reasoning_effort: 'low' })
-        }, {
-            headers: {
-                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            responseType: 'stream',
-            signal: controller.signal
-        });
-    } catch (error) {
-        const status = error.response?.status;
-        console.error('Erro na IA do Groq:', status || error.message);
-        if (status === 429 || status === 413) {
-            return res.status(429).json({ error: 'A STEAM_BB ESTÁ SOBRECARREGADA (LIMITE DO GROQ). ESPERE UM MINUTO E TENTE DE NOVO.' });
-        }
-        return res.status(500).json({ error: 'ERRO: CONEXÃO COM O CÉREBRO DA STEAM_BB PERDIDA.' });
-    }
-
-    // Repassa o texto para o navegador conforme o Groq vai gerando
-    res.set({
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'X-Accel-Buffering': 'no'
-    });
-    res.flushHeaders();
-
-    const stream = groqResponse.data;
-    stream.setEncoding('utf8');
-    let buffer = '';
-    let escreveuAlgo = false;
-
-    stream.on('data', (chunk) => {
-        buffer += chunk;
-        const linhas = buffer.split('\n');
-        buffer = linhas.pop();
-        for (const linha of linhas) {
-            const texto = lerLinhaDoStream(linha);
-            if (texto) {
-                res.write(texto);
-                escreveuAlgo = true;
-            }
-        }
-    });
-    stream.on('end', () => {
-        res.end(escreveuAlgo ? '' : 'A STEAM_BB FICOU SEM PALAVRAS. TENTE DE NOVO.');
-    });
-    stream.on('error', (error) => {
-        if (controller.signal.aborted) return;
-        console.error('Streaming do Groq caiu:', error.message);
-        res.end('\n[ERRO: A CONEXÃO CAIU NO MEIO DA RESPOSTA]');
-    });
+    const mensagens = [{ role: 'system', content: promptDoSistema(montarContexto(jogos, recentes)) }, ...history];
+    await responderComIA(res, mensagens, controller.signal);
 });
 
 // JSON malformado no corpo da requisição: responde em JSON em vez de vazar o stack trace do servidor
@@ -537,7 +735,7 @@ app.use((err, req, res, next) => {
 });
 
 // Exporta o app para os testes; só abre a porta quando roda com "node server.js"
-module.exports = { app, cachePrecos, cacheJogos, promptDoSistema, promptDoValor, promptDoJogo };
+module.exports = { app, cachePrecos, cacheJogos, cacheRecentes, cacheQuasePlatinados, promptDoSistema, promptDoValor, promptDoJogo, promptDoDuelo };
 
 if (require.main === module) {
     const PORT = process.env.PORT || 3001;

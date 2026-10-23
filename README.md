@@ -7,12 +7,15 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 ## ✨ Funcionalidades Principais
 
 * 🔍 **Busca de Perfil Flexível:** Aceita o `SteamID64`, o link do perfil (`steamcommunity.com/id/seunome`) ou só o nome personalizado.
-* 🔗 **Link Compartilhável:** Depois da busca, a URL vira `?id=seunome`. Mande para os amigos verem a sua humilhação.
+* 🔗 **Link Compartilhável com Prévia:** Depois da busca, a URL vira `?id=seunome`. No WhatsApp, Discord e Telegram o link aparece com um card brutalista gerado na hora, com nome, horas e jogos nunca abertos.
+* ⚔ **Duelo de Bibliotecas:** Coloque um amigo no ringue (`?id=voce&vs=amigo`). O painel compara as duas contas, marca com 💀 quem está pior em cada critério e a SteamBB dá o veredito.
+* 🕹️ **Últimas 2 Semanas:** O que você jogou recentemente, com as horas de cada jogo (a SteamBB também usa isso para te zoar).
+* 🏆 **Quase Platinados:** Varre as conquistas dos seus 30 jogos mais jogados e mostra os que você largou perto dos 100%.
 * 🎮 **Biblioteca Interativa:** Capas oficiais da Steam CDN, busca por nome, filtros (nunca abertos, jogados, +100h), ordenação por horas, nome, ID ou preço e paginação.
 * 📊 **Raio-X do Perfil:** Total de jogos, horas totais, porcentagem de jogos nunca abertos e o seu maior vício.
 * 💸 **Calculadora de Valor da Conta:** Consulta preços em lote na loja da Steam (BR), com cache e *Auto-Retry* contra Rate Limit. Mostra os jogos mais caros e o **dinheiro jogado fora** em jogos que você nunca abriu.
 * 🏆 **Diagnóstico de Conquistas Avançado:** Integração com o *Steam Game Schema* para identificar as conquistas pendentes de cada jogo, processando os nomes reais e as descrições oficiais em português do Brasil.
-* 🤖 **Terminal SteamBB (IA):** Integração com a API do **Groq (modelo GPT-OSS 120B)**. Um assistente sarcástico que lê os seus dados de jogo para te humilhar pessoalmente. A SteamBB vai zombar dos jogos que você comprou e nunca abriu, te ridicularizar pelo valor gasto e te chamar de *tryhard* nos jogos já platinados. As respostas aparecem em tempo real (streaming), como num terminal de verdade.
+* 🤖 **Terminal SteamBB (IA):** Integração com a API do **Groq (modelo GPT-OSS 120B)**. Um assistente sarcástico que lê os seus dados de jogo para te humilhar pessoalmente. A SteamBB vai zombar dos jogos que você comprou e nunca abriu, te ridicularizar pelo valor gasto e te chamar de *tryhard* nos jogos já platinados. As respostas aparecem em tempo real (streaming), como num terminal de verdade, e a conversa fica salva no navegador.
 
 ---
 
@@ -22,6 +25,9 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 * **React** (com Vite)
 * **Tailwind CSS** (para o design Neo-Brutalista de alto contraste)
 * **Styled-Components** (para animações de *loading* personalizadas e dinâmicas)
+* **@vercel/og** (imagem de prévia dos links, gerada numa função da Vercel)
+* **Vercel Analytics** (contagem de visitas)
+* **Vitest** (testes)
 
 ### Back-end
 * **Node.js**
@@ -30,7 +36,7 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 * **express-rate-limit** (limite de mensagens por IP para proteger a cota do Groq)
 
 ### Inteligência Artificial
-* **Groq API** rodando o modelo **GPT-OSS 120B** na nuvem (rápido e com plano gratuito). O modelo pode ser trocado pela variável `GROQ_MODEL`.
+* **Groq API** rodando o modelo **GPT-OSS 120B** na nuvem (rápido e com plano gratuito), com o **GPT-OSS 20B** como reserva: o limite de tokens do Groq é separado por modelo, então quando o principal lota (ou é aposentado) o reserva assume sozinho. Se a IA recusar uma resposta, o servidor tenta de novo antes de mostrar.
 
 ---
 
@@ -53,7 +59,8 @@ O servidor sobe em `http://localhost:3001` (teste em `/api/status`). Para rodar 
 Variáveis opcionais do backend:
 | Variável | Padrão | Para que serve |
 |---|---|---|
-| `GROQ_MODEL` | `openai/gpt-oss-120b` | Modelo da IA no Groq |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Modelo principal da IA no Groq |
+| `GROQ_FALLBACK_MODEL` | `openai/gpt-oss-20b` | Modelo reserva, usado quando o principal falha |
 | `CHAT_LIMIT_PER_MINUTE` | `10` | Mensagens por minuto que cada visitante pode mandar para a IA |
 | `FRONTEND_URL` | (vazio = libera tudo) | Endereço do site em produção, para o CORS |
 | `TRUST_PROXY` | `3` | Quantos proxies existem na frente do servidor (no Render são 3: Cloudflare, balanceador e proxy local) |
@@ -63,6 +70,7 @@ Variáveis opcionais do backend:
 cd steam-frontend
 npm install
 npm run dev
+npm test        # testes com Vitest
 ```
 Por padrão o front conversa com `http://localhost:3001`. Para apontar para outro backend, crie um `.env.local` com `VITE_API_URL=...` (veja `.env.example`).
 
@@ -87,11 +95,20 @@ O projeto é dividido em duas partes, publicadas separadamente (ambas com plano 
 2. Root Directory: `steam-frontend` (o preset Vite é detectado sozinho).
 3. Em **Environment Variables**, adicione `VITE_API_URL` = URL do backend no Render (sem `/` no final).
 4. Deploy! Depois volte no Render e coloque a URL da Vercel em `FRONTEND_URL`.
+5. (Opcional) Em **Analytics**, clique em **Enable** para ver quantas pessoas usam o site.
+
+A pasta `steam-frontend/api/` tem funções da Vercel para a prévia dos links: `/api/og` gera a imagem e `/api/compartilhar` entrega as meta tags. O `vercel.json` manda só os robôs de prévia (WhatsApp, Discord etc.) para lá; as pessoas continuam recebendo o site normal.
+
+### Manter o backend acordado
+O workflow `.github/workflows/manter-acordado.yml` acessa o backend a cada 10 minutos, para a primeira visita não esperar ~1 min. O agendamento do GitHub pode atrasar, então para algo mais pontual crie também um monitor grátis no [UptimeRobot](https://uptimerobot.com):
+1. **Add New Monitor** → tipo **HTTP(s)**.
+2. URL: `https://SEU-BACKEND.onrender.com/api/status`.
+3. Intervalo: **5 minutes** → **Create Monitor**.
 
 ---
 
 ## ✅ Integração Contínua
-A cada push na `main`, o GitHub Actions (`.github/workflows/ci.yml`) roda os testes do backend e o lint e o build do frontend. Se algo quebrar, o erro aparece na aba **Actions** do repositório.
+A cada push na `main`, o GitHub Actions (`.github/workflows/ci.yml`) roda os testes do backend e o lint, os testes e o build do frontend. Se algo quebrar, o erro aparece na aba **Actions** do repositório.
 
 ---
 
