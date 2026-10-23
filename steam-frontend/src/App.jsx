@@ -357,6 +357,7 @@ function App() {
                       key={steamId}
                       games={games}
                       precos={precos}
+                      repetidos={valores.repetidos}
                       onGameClick={clicarNoJogo}
                       ocupado={isChatting}
                       tempoPrivado={resumo.tempoPrivado}

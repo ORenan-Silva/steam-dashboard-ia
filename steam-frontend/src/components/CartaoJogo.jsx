@@ -7,6 +7,8 @@ const ETIQUETA = {
   pago: { classe: 'bg-cyan-400 text-zinc-950', texto: (p) => formatarReais(p.cheio) },
   gratis: { classe: 'bg-cyan-400 text-zinc-950', texto: () => 'GRÁTIS' },
   indisponivel: { classe: 'bg-zinc-700 text-zinc-100', texto: () => 'FORA DE VENDA' },
+  // Vendido no mesmo pacote de outro jogo da biblioteca: o preço já foi contado lá
+  repetido: { classe: 'bg-zinc-700 text-zinc-100', texto: () => 'MESMO PACOTE' },
 };
 
 // Capa reserva embutida no próprio site (antes vinha do placehold.co, um serviço de terceiros a menos)
@@ -15,9 +17,9 @@ const CAPA_RESERVA = `data:image/svg+xml,${encodeURIComponent(
   '<text x="230" y="118" fill="#e4e4e7" font-family="monospace" font-size="34" font-weight="900" text-anchor="middle">SEM CAPA</text></svg>'
 )}`;
 
-const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado }) => {
+const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado, repetido }) => {
   const nuncaAberto = !tempoPrivado && game.playtime_forever === 0;
-  const etiqueta = preco ? ETIQUETA[situacaoDoPreco(preco)] : null;
+  const etiqueta = preco ? ETIQUETA[repetido ? 'repetido' : situacaoDoPreco(preco)] : null;
 
   return (
     <button

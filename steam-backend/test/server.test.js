@@ -124,74 +124,76 @@ test('biblioteca fica em cache, mas biblioteca vazia (privada) não', async () =
     assert.equal(chamadasGet.length, 3);
 });
 
-test('preços: separa pago, grátis de verdade e fora da loja, e marca os que faltaram', async () => {
-    respostaGet = (url, params) => {
-        assert.equal(url, 'https://store.steampowered.com/api/appdetails');
-        if (params.filters === 'price_overview') {
-            assert.equal(params.appids, '10,20,30,40,50');
-            return {
-                data: {
-                    10: { success: true, data: { price_overview: { initial: 4999, final: 2499 } } },
-                    20: { success: true, data: [] }, // sem preço: grátis?
-                    30: { success: false }, // removido da loja
-                    50: { success: true, data: [] }, // sem preço: fora de venda com página no ar?
-                }
-            };
-        }
-        // Conferência um a um de quem veio sem preço
-        assert.equal(params.filters, 'basic');
-        const respostas = {
-            20: { success: true, data: { name: 'Jogo Grátis', is_free: true } },
-            50: { success: true, data: { name: 'Jogo Fora de Venda', is_free: false } },
-        };
-        return { data: { [params.appids]: respostas[params.appids] } };
-    };
-    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [10, 20, 30, 40, 50, 'abc', 10] }) });
+// Itens no formato do IStoreBrowseService/GetItems (visto no diagnóstico com a API real)
+const LOJA_ITENS = 'https://api.steampowered.com/IStoreBrowseService/GetItems/v1/';
+const pacote = (packageid, centavos, extra = {}) => ({ packageid, final_price_in_cents: String(centavos), included_game_count: 1, ...extra });
+const ITENS_DA_LOJA = {
+    202970: { appid: 202970, success: 1, visible: true, name: 'Call of Duty®: Black Ops II', best_purchase_option: pacote(18052, 21990) },
+    202990: { appid: 202990, success: 1, visible: true, name: 'Call of Duty: Black Ops II - Multiplayer', type: 14 },
+    730: { appid: 730, success: 1, visible: true, is_free: true, name: 'Counter-Strike 2', best_purchase_option: pacote(54029, 7499) },
+    252950: { appid: 252950, success: 1, visible: true, name: 'Rocket League®' },
+    111: { appid: 111, success: 1, visible: true, name: 'Só em coleção', best_purchase_option: { bundleid: 6451, final_price_in_cents: '425772', included_game_count: 55 } },
+    222: { appid: 222, success: 1, visible: true, name: 'Em promoção', best_purchase_option: pacote(999, 2999, { original_price_in_cents: '5999', discount_pct: 50 }) },
+    333: { appid: 333, success: 2, name: 'Não existe' },
+};
+const lojaResponde = (itens = ITENS_DA_LOJA) => (url, params) => {
+    assert.equal(url, LOJA_ITENS);
+    const { ids, context } = JSON.parse(params.input_json);
+    assert.deepEqual(context, { language: 'brazilian', country_code: 'BR' });
+    return { data: { response: { store_items: ids.map(({ appid }) => itens[appid]).filter(Boolean) } } };
+};
+
+test('preços: pago avulso, grátis antes do preço, sem venda avulsa, coleção, promoção e falha', async () => {
+    respostaGet = lojaResponde();
+    const appIds = [202970, 202990, 730, 252950, 111, 222, 333, 444, 'abc', 202970];
+    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds }) });
     const { precos, falharam } = await res.json();
     assert.deepEqual(precos, {
-        10: { cheio: 49.99, atual: 24.99, situacao: 'pago' },
-        20: { cheio: 0, atual: 0, situacao: 'gratis' },
-        30: { cheio: 0, atual: 0, situacao: 'indisponivel' },
-        50: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+        202970: { cheio: 219.9, atual: 219.9, situacao: 'pago', pacote: 18052 },
+        // Multiplayer do BO2 não tem venda própria: não soma o preço do jogo de novo
+        202990: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+        // CS2 é grátis, mesmo com o Prime como "melhor opção de compra"
+        730: { cheio: 0, atual: 0, situacao: 'gratis' },
+        252950: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+        // Só vendido dentro de uma coleção de 55 jogos: não soma R$ 4.257
+        111: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+        222: { cheio: 59.99, atual: 29.99, situacao: 'pago', pacote: 999 },
+        333: { cheio: 0, atual: 0, situacao: 'indisponivel' },
     });
-    assert.deepEqual(falharam, ['40']);
-    // 1 consulta em lote + 2 conferências (só para os sem preço; o removido não precisa)
-    assert.deepEqual(chamadasGet.map(c => c.params.filters).sort(), ['basic', 'basic', 'price_overview']);
+    assert.deepEqual(falharam, ['444']);
+    assert.equal(chamadasGet.length, 1, 'tudo numa consulta só');
 
     // Segunda vez vem do cache: só o que falhou é consultado de novo
-    respostaGet = () => ({ data: { 40: { success: true, data: { price_overview: { initial: 1000, final: 1000 } } } } });
-    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [10, 20, 40, 50] }) });
-    const { precos: precos2 } = await res2.json();
-    assert.equal(precos2[40].cheio, 10);
-    assert.equal(precos2[20].situacao, 'gratis');
-    assert.equal(chamadasGet.length, 4);
-    assert.equal(chamadasGet[3].params.appids, '40');
+    respostaGet = lojaResponde({ 444: { appid: 444, success: 1, visible: true, best_purchase_option: pacote(1, 1000) } });
+    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [202970, 444] }) });
+    assert.equal((await res2.json()).precos[444].cheio, 10);
+    assert.deepEqual(JSON.parse(chamadasGet[1].params.input_json).ids, [{ appid: 444 }]);
 });
 
-test('preços: se a conferência de grátis falhar, o jogo entra em "falharam" (não vira grátis por engano)', async () => {
-    respostaGet = (url, params) => {
-        if (params.filters === 'price_overview') return { data: { 60: { success: true, data: [] } } };
-        throw erroHttp(500);
-    };
-    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [60] }) });
-    const { precos, falharam } = await res.json();
-    assert.deepEqual(precos, {});
-    assert.deepEqual(falharam, ['60']);
+test('preços: mais de 50 jogos são consultados em lotes de 50', async () => {
+    const itens = Object.fromEntries(Array.from({ length: 120 }, (_, i) => [i + 1, { appid: i + 1, success: 1, visible: true, is_free: true }]));
+    respostaGet = lojaResponde(itens);
+    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: Object.keys(itens) }) });
+    const { precos } = await res.json();
+    assert.equal(Object.keys(precos).length, 100, 'o pedido aceita no máximo 100 jogos');
+    assert.deepEqual(chamadasGet.map(c => JSON.parse(c.params.input_json).ids.length), [50, 50]);
 });
 
-test('preços: tenta de novo no Rate Limit (429) e cai para um por vez se o lote vier nulo', async () => {
+test('preços: tenta de novo no Rate Limit (429) e marca como falha se a loja continuar fora', async () => {
     let tentativas = 0;
     respostaGet = (url, params) => {
         tentativas++;
         if (tentativas === 1) throw erroHttp(429);
-        if (params.appids.includes(',')) return { data: null };
-        return { data: { [params.appids]: { success: true, data: { price_overview: { initial: 500, final: 500 } } } } };
+        return lojaResponde()(url, params);
     };
-    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [1, 2] }) });
-    const { precos, falharam } = await res.json();
-    assert.deepEqual(Object.keys(precos), ['1', '2']);
-    assert.deepEqual(falharam, []);
-    assert.equal(tentativas, 4);
+    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [202970] }) });
+    assert.equal((await res.json()).precos[202970].situacao, 'pago');
+    assert.equal(tentativas, 2);
+
+    cachePrecos.clear();
+    respostaGet = () => { throw erroHttp(500); };
+    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [202970] }) });
+    assert.deepEqual(await res2.json(), { precos: {}, falharam: ['202970'] });
 });
 
 test('chat sem mensagem nem evento devolve 400', async () => {

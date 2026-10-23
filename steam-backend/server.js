@@ -21,7 +21,6 @@ app.use(express.json({ limit: '50kb' }));
 
 const API_KEY = process.env.STEAM_API_KEY;
 const STEAM_API = 'https://api.steampowered.com';
-const STORE_API = 'https://store.steampowered.com/api/appdetails';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Modelos da IA no Groq, em ordem de preferência. Configuráveis porque o Groq aposenta modelos
@@ -43,7 +42,7 @@ const MAX_MESSAGE_CHARS = 1000;
 const CHAT_LIMIT_PER_MINUTE = Number(process.env.CHAT_LIMIT_PER_MINUTE || 10);
 
 // Loja da Steam: quantos jogos por consulta e pausa entre consultas (anti Rate Limit)
-const STORE_BATCH_SIZE = 25;
+const STORE_BATCH_SIZE = 50;
 const STORE_DELAY_MS = Number(process.env.STORE_DELAY_MS ?? 300);
 const STORE_RETRY_MS = Number(process.env.STORE_RETRY_MS ?? 2000);
 const MAX_APPS_PER_REQUEST = 100;
@@ -245,32 +244,52 @@ const buscarConquistas = async (steamId, appId) => {
     }));
 };
 
-// Situação de cada jogo na loja:
-// - 'pago': tem preço (price_overview)
-// - 'gratis': gratuito de verdade (is_free)
-// - 'indisponivel': não é vendido sozinho: removido da loja, só em pacote ou sem venda no Brasil
-//   (success = false, ou sem preço e não gratuito)
-// Só os pagos entram na soma; os indisponíveis ficam de fora porque não têm preço atual.
+// Preços vêm do IStoreBrowseService/GetItems (API pública da loja, em lote). Para cada jogo ela diz se é
+// gratuito e quais são as opções de compra. Jogos que só vêm dentro de outro (ex.: Multiplayer e Zombies do
+// Black Ops II) não têm opção de compra própria, então não são somados de novo.
+//
+// Situação de cada jogo:
+// - 'pago': vendido avulso; vale o preço da melhor opção de compra
+// - 'gratis': is_free. Vem antes do preço: o CS2 é grátis, mas a "melhor opção de compra" dele é o Prime
+// - 'indisponivel': sem venda avulsa: removido da loja, só dentro de outro jogo ou de coleções, ou sem venda no Brasil
+// Só os pagos entram na soma.
 const PRECO_ZERO = { cheio: 0, atual: 0 };
+const LOJA_ITENS_API = `${STEAM_API}/IStoreBrowseService/GetItems/v1/`;
 
-// Lê a resposta com filters=price_overview. Devolve null quando não dá para saber:
-// jogo grátis e jogo fora de venda (com página ainda no ar) chegam iguais, com data = []
-const lerPreco = (entrada) => {
-    if (!entrada?.success) return { ...PRECO_ZERO, situacao: 'indisponivel' };
-    const preco = entrada.data?.price_overview;
-    if (preco) return { cheio: preco.initial / 100, atual: preco.final / 100, situacao: 'pago' };
-    return null;
+const lerItemDaLoja = (item) => {
+    if (item.success !== 1 || item.visible === false) return { ...PRECO_ZERO, situacao: 'indisponivel' };
+    if (item.is_free === true) return { ...PRECO_ZERO, situacao: 'gratis' };
+
+    const opcao = item.best_purchase_option;
+    const final = Number(opcao?.final_price_in_cents);
+    // Só pacote (packageid) é venda avulsa. Se a melhor opção é uma coleção (bundleid), somar o preço da
+    // coleção inteira distorceria o total; o jogo fica como sem venda avulsa.
+    if (!opcao?.packageid || !Number.isFinite(final)) return { ...PRECO_ZERO, situacao: 'indisponivel' };
+    if (final === 0) return { ...PRECO_ZERO, situacao: 'gratis' };
+
+    const original = Number(opcao.original_price_in_cents ?? final);
+    return {
+        cheio: (Number.isFinite(original) ? original : final) / 100,
+        atual: final / 100,
+        situacao: 'pago',
+        // Jogos diferentes vendidos pelo mesmo pacote contam uma vez só (o front agrupa por aqui)
+        pacote: opcao.packageid,
+    };
 };
 
-// Com filters=price_overview a loja aceita vários appids numa chamada só;
-// com filters=basic (usado para conferir se é grátis) é um jogo por vez
-const consultarLoja = async (appIds, filtros = 'price_overview') => {
+const consultarItensDaLoja = async (appIds) => {
     for (let tentativa = 1; ; tentativa++) {
         try {
-            const { data } = await axios.get(STORE_API, {
-                params: { appids: appIds.join(','), filters: filtros, cc: 'br' }
+            const { data } = await axios.get(LOJA_ITENS_API, {
+                params: {
+                    input_json: JSON.stringify({
+                        ids: appIds.map(appid => ({ appid: Number(appid) })),
+                        context: { language: 'brazilian', country_code: 'BR' },
+                        data_request: { include_basic_info: true, include_all_purchase_options: true },
+                    }),
+                },
             });
-            return data;
+            return data?.response?.store_items || [];
         } catch (err) {
             if (err.response?.status !== 429 || tentativa === 3) throw err;
             console.log(`[STEAM_BB AVISO]: Rate Limit na loja. Aguardando... (Tentativa ${tentativa}/3)`);
@@ -279,20 +298,10 @@ const consultarLoja = async (appIds, filtros = 'price_overview') => {
     }
 };
 
-// Jogo sem preço: pergunta à loja se ele é gratuito (is_free) ou se só não está mais à venda
-const conferirSemPreco = async (appId) => {
-    const data = await consultarLoja([appId], 'basic');
-    const info = data?.[appId];
-    if (!info) throw new Error(`loja não respondeu sobre o app ${appId}`);
-    const gratis = info.success === true && info.data?.is_free === true;
-    return { ...PRECO_ZERO, situacao: gratis ? 'gratis' : 'indisponivel' };
-};
-
 const buscarPrecos = async (appIds) => {
     const precos = {};
     const falharam = [];
     const faltando = [];
-    const semPreco = [];
 
     for (const appId of appIds) {
         const emCache = cachePrecos.get(appId);
@@ -305,47 +314,22 @@ const buscarPrecos = async (appIds) => {
         if (i > 0) await esperar(STORE_DELAY_MS);
 
         try {
-            let data = await consultarLoja(lote);
-
-            // Se a loja recusar a consulta em lote, cai para um jogo por vez
-            if (!data && lote.length > 1) {
-                data = {};
-                for (const appId of lote) {
-                    Object.assign(data, await consultarLoja([appId]));
-                    await esperar(STORE_DELAY_MS);
-                }
-            }
-
+            const itens = await consultarItensDaLoja(lote);
+            const porApp = new Map(itens.map(item => [String(item.appid ?? item.id?.appid), item]));
             for (const appId of lote) {
-                if (!data || !(appId in data)) {
+                const item = porApp.get(appId);
+                if (!item) {
                     falharam.push(appId);
                     continue;
                 }
-                const preco = lerPreco(data[appId]);
-                if (!preco) {
-                    semPreco.push(appId);
-                    continue;
-                }
-                precos[appId] = preco;
-                cachePrecos.set(appId, preco);
+                precos[appId] = lerItemDaLoja(item);
+                cachePrecos.set(appId, precos[appId]);
             }
         } catch (err) {
             console.error('Erro ao consultar a loja:', err.message);
             falharam.push(...lote);
         }
     }
-
-    // Confere os sem preço aos poucos (a loja bloqueia quem pergunta rápido demais)
-    await emParalelo(semPreco, 4, async (appId) => {
-        try {
-            precos[appId] = await conferirSemPreco(appId);
-            cachePrecos.set(appId, precos[appId]);
-        } catch (err) {
-            console.error('Erro ao conferir jogo sem preço:', err.message);
-            falharam.push(appId);
-        }
-        await esperar(STORE_DELAY_MS);
-    });
 
     return { precos, falharam };
 };
@@ -596,30 +580,6 @@ app.get('/api/achievements/:steamId/:appId', async (req, res) => {
         return res.status(400).json({ error: 'Sem conquistas para este jogo.' });
     }
     res.json({ achievements });
-});
-
-// TEMPORÁRIO: diagnóstico do formato do IStoreBrowseService/GetItems (será removido).
-// Só aceita uma lista fixa de jogos de teste e devolve dados públicos da loja; a chave nunca é exposta.
-const APPS_DE_TESTE = [202970, 202990, 212910, 271590, 730, 252950, 292030];
-app.get('/api/diagnostico-loja', async (req, res) => {
-    const consulta = async (comChave) => {
-        try {
-            const { data } = await axios.get(`${STEAM_API}/IStoreBrowseService/GetItems/v1/`, {
-                params: {
-                    ...(comChave && { key: API_KEY }),
-                    input_json: JSON.stringify({
-                        ids: APPS_DE_TESTE.map(appid => ({ appid })),
-                        context: { language: 'brazilian', country_code: 'BR' },
-                        data_request: { include_basic_info: true, include_all_purchase_options: true },
-                    }),
-                },
-            });
-            return data;
-        } catch (error) {
-            return { erro: error.response?.status || error.message };
-        }
-    };
-    res.json({ semChave: await consulta(false), comChave: await consulta(true) });
 });
 
 // 6. Rota dos Jogos das Últimas 2 Semanas

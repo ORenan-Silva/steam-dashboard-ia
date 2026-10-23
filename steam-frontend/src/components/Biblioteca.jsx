@@ -14,7 +14,7 @@ const FILTROS = {
   vicio: { rotulo: '+100H', teste: (g) => g.playtime_forever >= 6000 },
 };
 
-const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
+const Biblioteca = ({ games, precos, repetidos, onGameClick, ocupado, tempoPrivado }) => {
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
   const [sortBy, setSortBy] = useState('hours');
@@ -113,6 +113,7 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
               onClick={onGameClick}
               ocupado={ocupado}
               tempoPrivado={tempoPrivado}
+              repetido={repetidos?.has(game.appid)}
             />
           ))}
         </div>

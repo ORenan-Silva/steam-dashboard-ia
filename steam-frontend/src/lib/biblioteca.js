@@ -31,23 +31,38 @@ export const somarValores = (games, precos) => {
   let pagosNuncaAbertos = 0;
   let foraDaLoja = 0;
   const comPreco = [];
+  // Jogos vendidos pelo mesmo pacote contam uma vez só. O primeiro da lista representa o pacote;
+  // os outros ficam em "repetidos" (o card mostra "MESMO PACOTE").
+  const grupos = new Map();
+  const repetidos = new Set();
 
   for (const game of games) {
     const preco = precos[game.appid];
     if (!preco) continue;
-    // Fora da loja não tem preço atual: fica fora da soma, mas é contado para o aviso
+    // Sem venda avulsa não tem preço próprio: fica fora da soma, mas é contado para o aviso
     if (situacaoDoPreco(preco) === 'indisponivel') {
       foraDaLoja++;
       continue;
     }
+    const chave = preco.pacote ?? `app-${game.appid}`;
+    if (grupos.has(chave)) {
+      grupos.get(chave).jogos.push(game);
+      repetidos.add(game.appid);
+    } else {
+      grupos.set(chave, { preco, jogos: [game] });
+    }
+  }
+
+  for (const { preco, jogos } of grupos.values()) {
     total += preco.cheio;
-    if (preco.cheio > 0) comPreco.push({ ...game, preco: preco.cheio });
-    if (!tempoPrivado && game.playtime_forever === 0 && preco.cheio > 0) {
+    if (preco.cheio > 0) comPreco.push({ ...jogos[0], preco: preco.cheio });
+    // O pacote só é "dinheiro jogado fora" se nenhum dos jogos dele foi aberto
+    if (!tempoPrivado && preco.cheio > 0 && jogos.every(j => j.playtime_forever === 0)) {
       desperdicio += preco.cheio;
       pagosNuncaAbertos++;
     }
   }
 
   const maisCaros = comPreco.sort((a, b) => b.preco - a.preco).slice(0, 3);
-  return { total, desperdicio, pagosNuncaAbertos, foraDaLoja, maisCaros, tempoPrivado };
+  return { total, desperdicio, pagosNuncaAbertos, foraDaLoja, repetidos, maisCaros, tempoPrivado };
 };
