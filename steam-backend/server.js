@@ -598,6 +598,30 @@ app.get('/api/achievements/:steamId/:appId', async (req, res) => {
     res.json({ achievements });
 });
 
+// TEMPORÁRIO: diagnóstico do formato do IStoreBrowseService/GetItems (será removido).
+// Só aceita uma lista fixa de jogos de teste e devolve dados públicos da loja; a chave nunca é exposta.
+const APPS_DE_TESTE = [202970, 202990, 212910, 271590, 730, 252950, 292030];
+app.get('/api/diagnostico-loja', async (req, res) => {
+    const consulta = async (comChave) => {
+        try {
+            const { data } = await axios.get(`${STEAM_API}/IStoreBrowseService/GetItems/v1/`, {
+                params: {
+                    ...(comChave && { key: API_KEY }),
+                    input_json: JSON.stringify({
+                        ids: APPS_DE_TESTE.map(appid => ({ appid })),
+                        context: { language: 'brazilian', country_code: 'BR' },
+                        data_request: { include_basic_info: true, include_all_purchase_options: true },
+                    }),
+                },
+            });
+            return data;
+        } catch (error) {
+            return { erro: error.response?.status || error.message };
+        }
+    };
+    res.json({ semChave: await consulta(false), comChave: await consulta(true) });
+});
+
 // 6. Rota dos Jogos das Últimas 2 Semanas
 app.get('/api/recent/:steamId', async (req, res) => {
     try {
