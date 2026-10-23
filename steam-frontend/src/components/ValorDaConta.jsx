@@ -108,7 +108,7 @@ const ValorDaConta = ({ calculo, valores, onCalcular }) => {
             <p>
               Estimativa pelo preço cheio atual da loja brasileira. Não considera o que você pagou, promoções, presentes,
               pacotes nem reembolsos.
-              {valores.foraDaLoja > 0 && <span className="text-zinc-100"> {valores.foraDaLoja} jogos não estão mais à venda no Brasil e ficaram fora da soma.</span>}
+              {valores.foraDaLoja > 0 && <span className="text-zinc-100"> {valores.foraDaLoja} jogos não são vendidos separadamente na loja brasileira (removidos, só em pacotes ou sem venda no Brasil) e ficaram fora da soma.</span>}
               {falharam > 0 && <span className="text-amber-300"> {falharam} jogos ficaram sem preço (a Steam bloqueou a consulta).</span>}
             </p>
             <button

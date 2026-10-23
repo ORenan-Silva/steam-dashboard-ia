@@ -20,7 +20,7 @@ export const resumirBiblioteca = (games) => {
 };
 
 // Soma o valor da conta com os preços já consultados (preço cheio da loja BR)
-// Situação do jogo na loja: 'pago', 'gratis' ou 'indisponivel' (removido ou sem venda no Brasil).
+// Situação do jogo na loja: 'pago', 'gratis' ou 'indisponivel' (não vendido sozinho: removido, só em pacote ou sem venda no Brasil).
 // Respostas antigas sem "situacao" são deduzidas pelo preço.
 export const situacaoDoPreco = (preco) => preco.situacao || (preco.cheio > 0 ? 'pago' : 'gratis');
 

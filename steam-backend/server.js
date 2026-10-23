@@ -248,7 +248,8 @@ const buscarConquistas = async (steamId, appId) => {
 // Situação de cada jogo na loja:
 // - 'pago': tem preço (price_overview)
 // - 'gratis': gratuito de verdade (is_free)
-// - 'indisponivel': removido da loja ou sem venda no Brasil (success = false, ou sem preço e não gratuito)
+// - 'indisponivel': não é vendido sozinho: removido da loja, só em pacote ou sem venda no Brasil
+//   (success = false, ou sem preço e não gratuito)
 // Só os pagos entram na soma; os indisponíveis ficam de fora porque não têm preço atual.
 const PRECO_ZERO = { cheio: 0, atual: 0 };
 

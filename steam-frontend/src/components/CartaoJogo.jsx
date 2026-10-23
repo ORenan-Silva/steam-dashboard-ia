@@ -1,11 +1,12 @@
 import { Hourglass, Lock } from 'lucide-react';
 import { capaDoJogo, formatarHoras, formatarReais, situacaoDoPreco } from '../lib/biblioteca';
 
-// Etiqueta de preço: ciano para pago e grátis; cinza para jogo que saiu da loja
+// Etiqueta de preço: ciano para pago e grátis; cinza para jogo que não é vendido sozinho
+// (removido da loja, só em pacote ou sem venda no Brasil)
 const ETIQUETA = {
   pago: { classe: 'bg-cyan-400 text-zinc-950', texto: (p) => formatarReais(p.cheio) },
   gratis: { classe: 'bg-cyan-400 text-zinc-950', texto: () => 'GRÁTIS' },
-  indisponivel: { classe: 'bg-zinc-700 text-zinc-100', texto: () => 'FORA DA LOJA' },
+  indisponivel: { classe: 'bg-zinc-700 text-zinc-100', texto: () => 'FORA DE VENDA' },
 };
 
 // Capa reserva embutida no próprio site (antes vinha do placehold.co, um serviço de terceiros a menos)
