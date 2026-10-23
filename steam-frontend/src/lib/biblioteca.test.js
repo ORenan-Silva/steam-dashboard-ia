@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatarHoras, formatarReais, resumirBiblioteca, somarValores } from './biblioteca';
+import { formatarHoras, formatarReais, resumirBiblioteca, situacaoDoPreco, somarValores } from './biblioteca';
 
 const JOGOS = [
   { appid: 1, name: 'Counter-Strike', playtime_forever: 90000 },
@@ -63,6 +63,25 @@ describe('somarValores', () => {
     expect(valores.desperdicio).toBe(0);
     expect(valores.pagosNuncaAbertos).toBe(0);
     expect(valores.tempoPrivado).toBe(true);
+  });
+
+  test('jogo fora da loja não entra na soma nem no "jogado fora", mas é contado', () => {
+    const precos = {
+      2: { cheio: 0, atual: 0, situacao: 'indisponivel' }, // nunca aberto, mas saiu da loja
+      3: { cheio: 100, atual: 100, situacao: 'pago' },
+      4: { cheio: 0, atual: 0, situacao: 'gratis' },
+    };
+    const valores = somarValores(JOGOS, precos);
+    expect(valores.total).toBe(100);
+    expect(valores.desperdicio).toBe(0);
+    expect(valores.pagosNuncaAbertos).toBe(0);
+    expect(valores.foraDaLoja).toBe(1);
+  });
+
+  test('situacaoDoPreco entende respostas antigas, sem o campo situacao', () => {
+    expect(situacaoDoPreco({ cheio: 49.9, atual: 49.9 })).toBe('pago');
+    expect(situacaoDoPreco({ cheio: 0, atual: 0 })).toBe('gratis');
+    expect(situacaoDoPreco({ cheio: 0, atual: 0, situacao: 'indisponivel' })).toBe('indisponivel');
   });
 
   test('ignora jogos ainda sem preço consultado', () => {

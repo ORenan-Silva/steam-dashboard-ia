@@ -1,5 +1,12 @@
 import { Hourglass, Lock } from 'lucide-react';
-import { capaDoJogo, formatarHoras, formatarReais } from '../lib/biblioteca';
+import { capaDoJogo, formatarHoras, formatarReais, situacaoDoPreco } from '../lib/biblioteca';
+
+// Etiqueta de preço: ciano para pago e grátis; cinza para jogo que saiu da loja
+const ETIQUETA = {
+  pago: { classe: 'bg-cyan-400 text-zinc-950', texto: (p) => formatarReais(p.cheio) },
+  gratis: { classe: 'bg-cyan-400 text-zinc-950', texto: () => 'GRÁTIS' },
+  indisponivel: { classe: 'bg-zinc-700 text-zinc-100', texto: () => 'FORA DA LOJA' },
+};
 
 // Capa reserva embutida no próprio site (antes vinha do placehold.co, um serviço de terceiros a menos)
 const CAPA_RESERVA = `data:image/svg+xml,${encodeURIComponent(
@@ -9,7 +16,7 @@ const CAPA_RESERVA = `data:image/svg+xml,${encodeURIComponent(
 
 const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado }) => {
   const nuncaAberto = !tempoPrivado && game.playtime_forever === 0;
-  const textoPreco = preco ? (preco.cheio > 0 ? formatarReais(preco.cheio) : 'GRÁTIS') : null;
+  const etiqueta = preco ? ETIQUETA[situacaoDoPreco(preco)] : null;
 
   return (
     <button
@@ -44,8 +51,8 @@ const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado }) => {
               <><Hourglass size={13} strokeWidth={3} aria-hidden="true" /> {formatarHoras(game.playtime_forever)}</>
             )}
           </span>
-          {textoPreco ? (
-            <span className="bg-cyan-400 text-zinc-950 border-2 border-zinc-200 px-2 py-1 estalo">{textoPreco}</span>
+          {etiqueta ? (
+            <span className={`${etiqueta.classe} border-2 border-zinc-200 px-2 py-1 estalo`}>{etiqueta.texto(preco)}</span>
           ) : (
             <span className="text-zinc-400 font-mono">#{game.appid}</span>
           )}

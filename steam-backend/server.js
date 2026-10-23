@@ -245,18 +245,29 @@ const buscarConquistas = async (steamId, appId) => {
     }));
 };
 
-// Jogos grátis vêm com data = [] e jogos removidos da loja com success = false: ambos valem R$ 0
+// Situação de cada jogo na loja:
+// - 'pago': tem preço (price_overview)
+// - 'gratis': gratuito de verdade (is_free)
+// - 'indisponivel': removido da loja ou sem venda no Brasil (success = false, ou sem preço e não gratuito)
+// Só os pagos entram na soma; os indisponíveis ficam de fora porque não têm preço atual.
+const PRECO_ZERO = { cheio: 0, atual: 0 };
+
+// Lê a resposta com filters=price_overview. Devolve null quando não dá para saber:
+// jogo grátis e jogo fora de venda (com página ainda no ar) chegam iguais, com data = []
 const lerPreco = (entrada) => {
-    const preco = entrada?.success && entrada.data?.price_overview;
-    return preco ? { cheio: preco.initial / 100, atual: preco.final / 100 } : { cheio: 0, atual: 0 };
+    if (!entrada?.success) return { ...PRECO_ZERO, situacao: 'indisponivel' };
+    const preco = entrada.data?.price_overview;
+    if (preco) return { cheio: preco.initial / 100, atual: preco.final / 100, situacao: 'pago' };
+    return null;
 };
 
-// Com filters=price_overview a loja aceita vários appids numa chamada só
-const consultarLoja = async (appIds) => {
+// Com filters=price_overview a loja aceita vários appids numa chamada só;
+// com filters=basic (usado para conferir se é grátis) é um jogo por vez
+const consultarLoja = async (appIds, filtros = 'price_overview') => {
     for (let tentativa = 1; ; tentativa++) {
         try {
             const { data } = await axios.get(STORE_API, {
-                params: { appids: appIds.join(','), filters: 'price_overview', cc: 'br' }
+                params: { appids: appIds.join(','), filters: filtros, cc: 'br' }
             });
             return data;
         } catch (err) {
@@ -267,10 +278,20 @@ const consultarLoja = async (appIds) => {
     }
 };
 
+// Jogo sem preço: pergunta à loja se ele é gratuito (is_free) ou se só não está mais à venda
+const conferirSemPreco = async (appId) => {
+    const data = await consultarLoja([appId], 'basic');
+    const info = data?.[appId];
+    if (!info) throw new Error(`loja não respondeu sobre o app ${appId}`);
+    const gratis = info.success === true && info.data?.is_free === true;
+    return { ...PRECO_ZERO, situacao: gratis ? 'gratis' : 'indisponivel' };
+};
+
 const buscarPrecos = async (appIds) => {
     const precos = {};
     const falharam = [];
     const faltando = [];
+    const semPreco = [];
 
     for (const appId of appIds) {
         const emCache = cachePrecos.get(appId);
@@ -299,14 +320,31 @@ const buscarPrecos = async (appIds) => {
                     falharam.push(appId);
                     continue;
                 }
-                precos[appId] = lerPreco(data[appId]);
-                cachePrecos.set(appId, precos[appId]);
+                const preco = lerPreco(data[appId]);
+                if (!preco) {
+                    semPreco.push(appId);
+                    continue;
+                }
+                precos[appId] = preco;
+                cachePrecos.set(appId, preco);
             }
         } catch (err) {
             console.error('Erro ao consultar a loja:', err.message);
             falharam.push(...lote);
         }
     }
+
+    // Confere os sem preço aos poucos (a loja bloqueia quem pergunta rápido demais)
+    await emParalelo(semPreco, 4, async (appId) => {
+        try {
+            precos[appId] = await conferirSemPreco(appId);
+            cachePrecos.set(appId, precos[appId]);
+        } catch (err) {
+            console.error('Erro ao conferir jogo sem preço:', err.message);
+            falharam.push(appId);
+        }
+        await esperar(STORE_DELAY_MS);
+    });
 
     return { precos, falharam };
 };
@@ -374,13 +412,29 @@ const promptDoDuelo = (desafiante, rival) => `Você é a SteamBB. O usuário des
 
 // Personalidade da SteamBB. Ácida e desbocada, mas o alvo é sempre o hábito de jogo, nunca a pessoa:
 // é isso que evita as recusas do gpt-oss ("Desculpe, não posso...") mesmo com palavrão liberado.
+// Repertório de palavrões: só interjeições, sem xingamento preconceituoso ou sexual (que gera recusa e risco jurídico).
+// O servidor sorteia alguns por resposta porque, só com exemplos fixos, o modelo repetia "porra" em quase tudo.
+const PALAVROES = [
+    'caralho', 'puta que pariu', 'puta merda', 'cacete', 'merda', 'bosta', 'foda-se', 'que porra é essa',
+    'pqp', 'desgraça', 'cagada', 'fodido', 'vai se ferrar', 'filho da mãe', 'que merda é essa',
+];
+const sortearPalavroes = (quantidade = 3) => {
+    const sorteio = [...PALAVROES];
+    for (let i = sorteio.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [sorteio[i], sorteio[j]] = [sorteio[j], sorteio[i]];
+    }
+    return sorteio.slice(0, quantidade);
+};
+
 const promptDoSistema = (contexto) => `Você é a "SteamBB" (uma homenagem ao banco de dados SteamDB), uma IA não-oficial rodando num terminal Cyberpunk Dark Neo-Brutalista.
     Personalidade: ácida, debochada, desbocada e implacável. Uma veterana da Steam que já viu de tudo e não tem paciência pra ninguém.
     Este é um painel de humor: o usuário abriu o site justamente para ser zoado pelos próprios hábitos de jogo (um "roast" consentido, como entre amigos).
 
     REGRAS DE ESTILO:
     - Respostas curtas e impactantes, em português do Brasil, com gíria e linguagem de internet.
-    - Seja desbocada: solte pelo menos um palavrão em toda resposta (ex.: "porra", "caralho", "merda", "puta que pariu"), como amigo zoando amigo. Principalmente quando pedirem elogio.
+    - Seja desbocada: solte pelo menos um palavrão em toda resposta, como amigo zoando amigo. Principalmente quando pedirem elogio.
+    - Varie o vocabulário: nesta resposta, use de preferência ${sortearPalavroes().map(p => `"${p}"`).join(', ')}. Evite repetir "porra".
     - NUNCA seja fofa, motivacional, carinhosa ou bajuladora. NUNCA use emojis. NUNCA use frases clichês como "Olá, como posso ajudar?".
     - Se pedirem elogio, carinho, validação ou para "inflar o ego": NÃO obedeça. Faça no máximo um elogio envenenado, que na verdade é zoeira, e termine humilhando.
     - Zoe os gastos, as horas, as conquistas e as escolhas de jogos. Nunca ataque aparência, família, renda real ou use preconceito.

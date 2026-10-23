@@ -20,16 +20,26 @@ export const resumirBiblioteca = (games) => {
 };
 
 // Soma o valor da conta com os preços já consultados (preço cheio da loja BR)
+// Situação do jogo na loja: 'pago', 'gratis' ou 'indisponivel' (removido ou sem venda no Brasil).
+// Respostas antigas sem "situacao" são deduzidas pelo preço.
+export const situacaoDoPreco = (preco) => preco.situacao || (preco.cheio > 0 ? 'pago' : 'gratis');
+
 export const somarValores = (games, precos) => {
   const tempoPrivado = tempoDeJogoPrivado(games);
   let total = 0;
   let desperdicio = 0;
   let pagosNuncaAbertos = 0;
+  let foraDaLoja = 0;
   const comPreco = [];
 
   for (const game of games) {
     const preco = precos[game.appid];
     if (!preco) continue;
+    // Fora da loja não tem preço atual: fica fora da soma, mas é contado para o aviso
+    if (situacaoDoPreco(preco) === 'indisponivel') {
+      foraDaLoja++;
+      continue;
+    }
     total += preco.cheio;
     if (preco.cheio > 0) comPreco.push({ ...game, preco: preco.cheio });
     if (!tempoPrivado && game.playtime_forever === 0 && preco.cheio > 0) {
@@ -39,5 +49,5 @@ export const somarValores = (games, precos) => {
   }
 
   const maisCaros = comPreco.sort((a, b) => b.preco - a.preco).slice(0, 3);
-  return { total, desperdicio, pagosNuncaAbertos, maisCaros, tempoPrivado };
+  return { total, desperdicio, pagosNuncaAbertos, foraDaLoja, maisCaros, tempoPrivado };
 };

@@ -124,30 +124,59 @@ test('biblioteca fica em cache, mas biblioteca vazia (privada) não', async () =
     assert.equal(chamadasGet.length, 3);
 });
 
-test('preços: lê pagos, grátis e removidos numa consulta só, e marca os que faltaram', async () => {
+test('preços: separa pago, grátis de verdade e fora da loja, e marca os que faltaram', async () => {
     respostaGet = (url, params) => {
         assert.equal(url, 'https://store.steampowered.com/api/appdetails');
-        assert.equal(params.filters, 'price_overview');
-        assert.equal(params.appids, '10,20,30,40');
-        return {
-            data: {
-                10: { success: true, data: { price_overview: { initial: 4999, final: 2499 } } },
-                20: { success: true, data: [] },
-                30: { success: false },
-            }
+        if (params.filters === 'price_overview') {
+            assert.equal(params.appids, '10,20,30,40,50');
+            return {
+                data: {
+                    10: { success: true, data: { price_overview: { initial: 4999, final: 2499 } } },
+                    20: { success: true, data: [] }, // sem preço: grátis?
+                    30: { success: false }, // removido da loja
+                    50: { success: true, data: [] }, // sem preço: fora de venda com página no ar?
+                }
+            };
+        }
+        // Conferência um a um de quem veio sem preço
+        assert.equal(params.filters, 'basic');
+        const respostas = {
+            20: { success: true, data: { name: 'Jogo Grátis', is_free: true } },
+            50: { success: true, data: { name: 'Jogo Fora de Venda', is_free: false } },
         };
+        return { data: { [params.appids]: respostas[params.appids] } };
     };
-    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [10, 20, 30, 40, 'abc', 10] }) });
+    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [10, 20, 30, 40, 50, 'abc', 10] }) });
     const { precos, falharam } = await res.json();
-    assert.deepEqual(precos, { 10: { cheio: 49.99, atual: 24.99 }, 20: { cheio: 0, atual: 0 }, 30: { cheio: 0, atual: 0 } });
+    assert.deepEqual(precos, {
+        10: { cheio: 49.99, atual: 24.99, situacao: 'pago' },
+        20: { cheio: 0, atual: 0, situacao: 'gratis' },
+        30: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+        50: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+    });
     assert.deepEqual(falharam, ['40']);
-    assert.equal(chamadasGet.length, 1);
+    // 1 consulta em lote + 2 conferências (só para os sem preço; o removido não precisa)
+    assert.deepEqual(chamadasGet.map(c => c.params.filters).sort(), ['basic', 'basic', 'price_overview']);
 
     // Segunda vez vem do cache: só o que falhou é consultado de novo
     respostaGet = () => ({ data: { 40: { success: true, data: { price_overview: { initial: 1000, final: 1000 } } } } });
-    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [10, 40] }) });
-    assert.equal((await res2.json()).precos[40].cheio, 10);
-    assert.equal(chamadasGet[1].params.appids, '40');
+    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [10, 20, 40, 50] }) });
+    const { precos: precos2 } = await res2.json();
+    assert.equal(precos2[40].cheio, 10);
+    assert.equal(precos2[20].situacao, 'gratis');
+    assert.equal(chamadasGet.length, 4);
+    assert.equal(chamadasGet[3].params.appids, '40');
+});
+
+test('preços: se a conferência de grátis falhar, o jogo entra em "falharam" (não vira grátis por engano)', async () => {
+    respostaGet = (url, params) => {
+        if (params.filters === 'price_overview') return { data: { 60: { success: true, data: [] } } };
+        throw erroHttp(500);
+    };
+    const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [60] }) });
+    const { precos, falharam } = await res.json();
+    assert.deepEqual(precos, {});
+    assert.deepEqual(falharam, ['60']);
 });
 
 test('preços: tenta de novo no Rate Limit (429) e cai para um por vez se o lote vier nulo', async () => {
