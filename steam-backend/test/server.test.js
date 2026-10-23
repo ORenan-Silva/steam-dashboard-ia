@@ -143,7 +143,7 @@ const lojaResponde = (itens = ITENS_DA_LOJA) => (url, params) => {
     return { data: { response: { store_items: ids.map(({ appid }) => itens[appid]).filter(Boolean) } } };
 };
 
-test('preços: pago avulso, grátis antes do preço, sem venda avulsa, coleção, promoção e falha', async () => {
+test('preços: pago avulso, grátis antes do preço, sem venda avulsa, coleção, promoção e jogo sem página', async () => {
     respostaGet = lojaResponde();
     const appIds = [202970, 202990, 730, 252950, 111, 222, 333, 444, 'abc', 202970];
     const res = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds }) });
@@ -159,15 +159,17 @@ test('preços: pago avulso, grátis antes do preço, sem venda avulsa, coleção
         111: { cheio: 0, atual: 0, situacao: 'indisponivel' },
         222: { cheio: 59.99, atual: 29.99, situacao: 'pago', pacote: 999 },
         333: { cheio: 0, atual: 0, situacao: 'indisponivel' },
+        // A loja não devolveu nada (servidor de teste, demo, jogo removido): fora de venda, não falha
+        444: { cheio: 0, atual: 0, situacao: 'indisponivel' },
     });
-    assert.deepEqual(falharam, ['444']);
+    assert.deepEqual(falharam, []);
     assert.equal(chamadasGet.length, 1, 'tudo numa consulta só');
 
-    // Segunda vez vem do cache: só o que falhou é consultado de novo
-    respostaGet = lojaResponde({ 444: { appid: 444, success: 1, visible: true, best_purchase_option: pacote(1, 1000) } });
-    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [202970, 444] }) });
-    assert.equal((await res2.json()).precos[444].cheio, 10);
-    assert.deepEqual(JSON.parse(chamadasGet[1].params.input_json).ids, [{ appid: 444 }]);
+    // Segunda vez vem do cache: só o que é novo é consultado
+    respostaGet = lojaResponde({ 555: { appid: 555, success: 1, visible: true, best_purchase_option: pacote(1, 1000) } });
+    const res2 = await pedir('/api/prices', { method: 'POST', body: JSON.stringify({ appIds: [202970, 444, 555] }) });
+    assert.equal((await res2.json()).precos[555].cheio, 10);
+    assert.deepEqual(JSON.parse(chamadasGet[1].params.input_json).ids, [{ appid: 555 }]);
 });
 
 test('preços: mais de 50 jogos são consultados em lotes de 50', async () => {

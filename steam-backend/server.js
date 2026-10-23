@@ -317,12 +317,10 @@ const buscarPrecos = async (appIds) => {
             const itens = await consultarItensDaLoja(lote);
             const porApp = new Map(itens.map(item => [String(item.appid ?? item.id?.appid), item]));
             for (const appId of lote) {
+                // A consulta funcionou e o jogo não veio: ele não tem mais página na loja
+                // (servidores de teste, betas, demos e jogos removidos). Falha é só quando a consulta dá erro.
                 const item = porApp.get(appId);
-                if (!item) {
-                    falharam.push(appId);
-                    continue;
-                }
-                precos[appId] = lerItemDaLoja(item);
+                precos[appId] = item ? lerItemDaLoja(item) : { ...PRECO_ZERO, situacao: 'indisponivel' };
                 cachePrecos.set(appId, precos[appId]);
             }
         } catch (err) {
