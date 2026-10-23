@@ -23,7 +23,7 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 ---
 
 ## 🎨 Identidade Visual
-Dark Neo-Brutalista: bordas grossas, sombras sólidas deslocadas, fonte monoespaçada e títulos em caixa alta (textos explicativos ficam em minúsculas, para facilitar a leitura). Cada cor tem um significado:
+Dark Neo-Brutalista: bordas grossas, sombras sólidas deslocadas, fonte monoespaçada e títulos em caixa alta (textos explicativos ficam em minúsculas, para facilitar a leitura). Animações com cara de terminal: glitch no título, brilho atravessando os botões, carimbos, números contando, linhas de CRT no terminal e um olho vigiando enquanto o perfil carrega (peças adaptadas do Uiverse.io, créditos em `THIRD_PARTY_NOTICES.md`). Tudo é desligado para quem ativa "reduzir movimento" no sistema. Cada cor tem um significado:
 
 | Cor | Significado | Onde aparece |
 |---|---|---|
@@ -39,7 +39,7 @@ Dark Neo-Brutalista: bordas grossas, sombras sólidas deslocadas, fonte monoespa
 ### Front-end
 * **React** (com Vite)
 * **Tailwind CSS** (para o design Neo-Brutalista de alto contraste)
-* **Styled-Components** (para animações de *loading* personalizadas e dinâmicas)
+* **Lucide** (ícones, no lugar dos emojis) e componentes adaptados do **Uiverse.io** (animações)
 * **satori + resvg** (imagem de prévia dos links, gerada numa função Node.js da Vercel)
 * **Vercel Analytics** (contagem de visitas)
 * **Vitest** (testes)
@@ -124,6 +124,15 @@ O workflow `.github/workflows/manter-acordado.yml` acessa o backend a cada 10 mi
 
 ---
 
+## ⚖️ Privacidade, termos e acessibilidade
+* Páginas **/privacidade**, **/termos** e **/seus-dados** (pedidos da LGPD e ferramentas para apagar o que fica no navegador).
+* Aviso de privacidade no primeiro acesso: conteúdo para maiores de 18 anos e estatísticas (Vercel Analytics) **desligadas por padrão**, só com consentimento. O site não usa cookies.
+* Defina `VITE_CONTATO_PRIVACIDADE` na Vercel com o e-mail do canal de privacidade (e faça um Redeploy). Sem ele, o site mostra "em configuração".
+* Auditoria de acessibilidade (axe-core, WCAG 2.2 AA) sem problemas; navegação completa pelo teclado.
+* Detalhes, riscos jurídicos e pendências em [`docs/CONFORMIDADE.md`](docs/CONFORMIDADE.md). **Não é parecer jurídico:** revise com um advogado.
+
+---
+
 ## ✅ Integração Contínua
 A cada push na `main`, o GitHub Actions (`.github/workflows/ci.yml`) roda os testes do backend e o lint, os testes e o build do frontend. Se algo quebrar, o erro aparece na aba **Actions** do repositório.
 
@@ -131,5 +140,8 @@ A cada push na `main`, o GitHub Actions (`.github/workflows/ci.yml`) roda os tes
 
 ## 🔒 Segurança da Aplicação
 NUNCA suba o seu arquivo `.env` para o GitHub. O `.gitignore` na raiz já bloqueia os arquivos `.env`, e as chaves `STEAM_API_KEY` e `GROQ_API_KEY` ficam apenas no servidor (nunca no front-end). Os prompts da IA são montados no servidor e cada visitante tem um limite de mensagens por minuto. Use os arquivos `.env.example` como modelo.
+
+## 📜 Créditos
+Componentes e ícones de terceiros e suas licenças: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (também publicado no site em `/licencas.txt`).
 
 ### Criado com muito sarcasmo, café e código. ###

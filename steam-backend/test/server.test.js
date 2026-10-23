@@ -70,10 +70,10 @@ beforeEach(() => {
     respostaPost = async () => ({ data: streamDoGroq([linhaSSE('Oi.')]) });
 });
 
-test('status responde e usa o IP real do visitante (trust proxy)', async () => {
+test('status responde sem expor o IP do visitante', async () => {
     const res = await pedir('/api/status', { ip: '203.0.113.7' });
     assert.equal(res.status, 200);
-    assert.equal((await res.json()).ip, '203.0.113.7');
+    assert.deepEqual(await res.json(), { status: 'Servidor a correr com sucesso!' });
 });
 
 test('resolve aceita SteamID64 direto sem chamar a Steam', async () => {

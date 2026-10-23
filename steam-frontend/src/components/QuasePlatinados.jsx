@@ -1,5 +1,9 @@
 import { useState } from 'react';
+import { ScanSearch, Trophy } from 'lucide-react';
+import Icone from './Icone';
 import Loader from './Loader';
+import Numero from './Numero';
+import TituloCard from './TituloCard';
 import { getJson } from '../lib/api';
 import { botaoBrutal, cartaoBrutal } from '../lib/estilos';
 
@@ -21,10 +25,8 @@ const QuasePlatinados = ({ steamId, onGameClick, ocupado }) => {
   };
 
   return (
-    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#fbbf24] flex flex-col gap-5`}>
-      <h3 className="text-lg md:text-xl font-black uppercase bg-zinc-200 text-zinc-950 px-4 py-2 shadow-[4px_4px_0px_0px_#fbbf24] self-start">
-        🏆 QUASE PLATINADOS
-      </h3>
+    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#fbbf24] flex flex-col gap-5 entrada`} style={{ '--atraso': '230ms' }}>
+      <TituloCard icone={Trophy} sombra="shadow-[4px_4px_0px_0px_#fbbf24]">QUASE PLATINADOS</TituloCard>
 
       {estado === 'parado' && (
         <>
@@ -33,54 +35,59 @@ const QuasePlatinados = ({ steamId, onGameClick, ocupado }) => {
           </p>
           <button
             onClick={escanear}
-            className={`${botaoBrutal} bg-amber-400 hover:bg-amber-500 text-zinc-950 py-3 px-4`}
+            className={`${botaoBrutal} bg-amber-400 hover:bg-amber-300 text-zinc-950 py-3 px-4 flex items-center justify-center gap-2`}
           >
+            <Icone icone={ScanSearch} caixa={false} cor="escuro" />
             ESCANEAR CONQUISTAS
           </button>
-          {erro && <p className="text-red-400 font-bold text-sm">{erro}</p>}
+          {erro && <p role="alert" className="text-red-400 font-bold text-sm">{erro}</p>}
         </>
       )}
 
       {estado === 'carregando' && (
         <div className="flex flex-col items-center gap-2 py-4">
-          <Loader />
-          <span className="text-sm font-bold text-zinc-300 animate-pulse">Vasculhando suas conquistas...</span>
+          <Loader rotulo="Escaneando conquistas" />
+          <span className="text-sm font-bold text-zinc-300 glitch-distorce">Vasculhando suas conquistas...</span>
         </div>
       )}
 
       {estado === 'pronto' && dados && (
         <>
-          <p className="text-sm font-black uppercase">
-            <span className="text-amber-400 text-2xl">{dados.platinados}</span> PLATINADOS ENTRE {dados.analisados} JOGOS COM CONQUISTAS
+          <p className="text-sm font-black uppercase surgir">
+            <span className="text-amber-400 text-2xl estalo"><Numero valor={dados.platinados} /></span> PLATINADOS ENTRE {dados.analisados} JOGOS COM CONQUISTAS
           </p>
           {dados.quase.length === 0 ? (
             <p className="font-bold text-zinc-300 bg-zinc-950 border-4 border-zinc-700 p-4 text-sm">
               Nenhum jogo perto dos 100%. Nem isso você termina.
             </p>
           ) : (
-            <div className="flex flex-col gap-3">
-              {dados.quase.map(game => {
+            <ul className="flex flex-col gap-3">
+              {dados.quase.map((game, i) => {
                 const faltam = game.total - game.feitas;
                 return (
-                  <button
-                    key={game.appid}
-                    type="button"
-                    onClick={() => onGameClick(game)}
-                    title={ocupado ? 'Espere a SteamBB terminar de falar' : `Perguntar à SteamBB sobre ${game.name}`}
-                    className={`text-left bg-zinc-950 border-2 border-zinc-700 hover:border-amber-400 p-3 flex flex-col gap-2 transition-colors ${ocupado ? 'cursor-wait' : 'cursor-pointer'}`}
-                  >
-                    <div className="flex justify-between gap-3 text-sm font-bold">
-                      <span className="truncate uppercase">{game.name}</span>
-                      <span className="text-amber-400 shrink-0">FALTA{faltam > 1 ? 'M' : ''} {faltam}</span>
-                    </div>
-                    <div className="h-2 bg-zinc-800">
-                      <div className="h-full bg-amber-400" style={{ width: `${(game.feitas / game.total) * 100}%` }} />
-                    </div>
-                    <span className="text-xs font-bold text-zinc-400">{game.feitas}/{game.total} CONQUISTAS</span>
-                  </button>
+                  <li key={game.appid} className="surgir" style={{ animationDelay: `${i * 70}ms` }}>
+                    <button
+                      type="button"
+                      onClick={() => onGameClick(game)}
+                      className={`w-full text-left bg-zinc-950 border-2 border-zinc-700 hover:border-amber-400 hover:-translate-y-0.5 p-3 flex flex-col gap-2 transition-all ${ocupado ? 'cursor-wait' : 'cursor-pointer'}`}
+                    >
+                      <span className="flex justify-between gap-3 text-sm font-bold">
+                        <span className="truncate uppercase">{game.name}</span>
+                        <span className="text-amber-400 shrink-0">FALTA{faltam > 1 ? 'M' : ''} {faltam}</span>
+                      </span>
+                      <span className="block h-2 bg-zinc-800">
+                        <span
+                          className="block h-full bg-amber-400 crescer"
+                          style={{ width: `${(game.feitas / game.total) * 100}%`, '--atraso': `${150 + i * 70}ms` }}
+                        />
+                      </span>
+                      <span className="text-xs font-bold text-zinc-300">{game.feitas}/{game.total} CONQUISTAS</span>
+                      <span className="sr-only"> (perguntar à SteamBB)</span>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </>
       )}

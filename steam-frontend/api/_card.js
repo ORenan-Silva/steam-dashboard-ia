@@ -73,7 +73,7 @@ export const cardDoPerfil = (resumo, host) => moldura(
     estatistica('NUNCA ABERTOS', resumo.tempoPrivado ? 'OCULTO' : numero(resumo.nuncaAbertos), COR.vermelho),
     estatistica('MAIOR VÍCIO', resumo.tempoPrivado ? 'OCULTO' : resumo.maisJogado ? `${numero(resumo.maisJogado.horas)}H` : '—', COR.lima, resumo.tempoPrivado ? 'TEMPO DE JOGO ESCONDIDO' : resumo.maisJogado?.nome),
   ),
-  rodape('QUANTO VOCÊ JÁ TORROU NA STEAM? DESCUBRA →'),
+  rodape('QUANTO SUA BIBLIOTECA VALERIA HOJE? DESCUBRA →'),
 );
 
 export const cardGenerico = (host) => moldura(

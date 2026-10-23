@@ -475,7 +475,8 @@ const lerLinhaDoStream = (linha) => {
 
 // 1. Rota de Status (o front chama ao abrir a página para "acordar" o servidor do Render)
 app.get('/api/status', (req, res) => {
-    res.json({ status: 'Servidor a correr com sucesso!', ip: req.ip });
+    // Não devolve o IP do visitante: o dado não é necessário (minimização, LGPD art. 6º III)
+    res.json({ status: 'Servidor a correr com sucesso!' });
 });
 
 // 2. Rota para descobrir o SteamID64 a partir do que a pessoa digitou

@@ -1,11 +1,18 @@
 @import "tailwindcss";
+@import "./animacoes.css";
 
 body {
-  background-color: #121212;
+  background-color: #09090b;
   color: white;
 }
 
 /* Barra de rolagem brutalista (no Windows a padrão é cinza e destoa do visual) */
 * {
   scrollbar-color: #a3e635 #09090b;
+}
+
+/* Foco visível em tudo que dá para usar pelo teclado */
+:focus-visible {
+  outline: 3px solid #a3e635;
+  outline-offset: 3px;
 }

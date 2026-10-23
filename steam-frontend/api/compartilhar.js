@@ -16,13 +16,13 @@ export default async function handler(req, res) {
   const resumoRival = vs ? await buscarResumoDoPerfil(vs, { comJogos: false, timeoutMs: 5000 }) : null;
 
   let titulo = 'SteamBB // Dash: quanto você já torrou na Steam?';
-  let descricao = 'Valor da conta, jogos nunca abertos e uma IA sarcástica julgando sua biblioteca Steam.';
+  let descricao = 'Valor estimado da conta, jogos nunca abertos e uma IA sarcástica julgando sua biblioteca Steam.';
   if (resumo && resumoRival) {
     titulo = `⚔ DUELO: ${resumo.nome} VS ${resumoRival.nome} | SteamBB`;
     descricao = 'Quem é o pior gamer? A SteamBB comparou as duas bibliotecas e deu o veredito.';
   } else if (resumo) {
     titulo = `${resumo.nome} foi julgado pela SteamBB`;
-    descricao = 'Veja quanto essa conta já torrou na Steam, quantos jogos nunca foram abertos e o que a IA mais sarcástica da Steam achou disso.';
+    descricao = 'Veja a estimativa de quanto essa biblioteca valeria hoje, quantos jogos nunca foram abertos e o que a IA mais sarcástica da Steam achou disso.';
   }
 
   const params = new URLSearchParams();

@@ -12,6 +12,7 @@
       ],
       "dest": "/api/compartilhar"
     },
-    { "handle": "filesystem" }
+    { "handle": "filesystem" },
+    { "src": "/(privacidade|termos|seus-dados)/?", "dest": "/index.html" }
   ]
 }

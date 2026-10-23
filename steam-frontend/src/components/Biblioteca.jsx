@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Gamepad2, Plus } from 'lucide-react';
 import CartaoJogo from './CartaoJogo';
+import Icone from './Icone';
+import TituloCard from './TituloCard';
 import { botaoBrutal, campoBrutal, cartaoBrutal } from '../lib/estilos';
 
 const POR_PAGINA = 48;
@@ -41,14 +44,12 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
   };
 
   return (
-    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#fbbf24]`}>
+    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#fbbf24] entrada`}>
       <div className="flex flex-col gap-6 mb-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h3 className="text-3xl font-black uppercase bg-zinc-200 text-zinc-950 px-6 py-3 shadow-[4px_4px_0px_0px_#fbbf24]">
-            BIBLIOTECA [{games.length}]
-          </h3>
+          <TituloCard icone={Gamepad2} sombra="shadow-[4px_4px_0px_0px_#fbbf24]" grande>BIBLIOTECA [{games.length}]</TituloCard>
           <div className="flex items-center gap-3 bg-amber-400 border-4 border-zinc-200 p-3 shadow-[4px_4px_0px_0px_#e4e4e7]">
-            <label htmlFor="sort" className="text-sm font-black uppercase hidden sm:block text-zinc-950">ORDENAR:</label>
+            <label htmlFor="sort" className="text-sm font-black uppercase sr-only sm:not-sr-only text-zinc-950">ORDENAR:</label>
             <select
               id="sort"
               value={sortBy}
@@ -62,19 +63,20 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
             </select>
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              aria-label={sortOrder === 'asc' ? 'Ordem crescente' : 'Ordem decrescente'}
-              className="bg-zinc-950 text-zinc-100 font-bold border-4 border-zinc-200 w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-zinc-800"
+              aria-label={sortOrder === 'asc' ? 'Ordem crescente (clique para inverter)' : 'Ordem decrescente (clique para inverter)'}
+              className="sombra-glitch bg-zinc-950 text-zinc-100 font-bold border-4 border-zinc-200 w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-zinc-800"
             >
-              {sortOrder === 'asc' ? '⬆' : '⬇'}
+              <Icone icone={sortOrder === 'asc' ? ArrowUp : ArrowDown} caixa={false} cor="claro" />
             </button>
           </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-4">
+          <label htmlFor="filtro-nome" className="sr-only">Filtrar jogos por nome</label>
           <input
+            id="filtro-nome"
             type="search"
-            placeholder="FILTRAR POR NOME..."
-            aria-label="Filtrar jogos por nome"
+            placeholder="Filtrar por nome..."
             value={busca}
             onChange={(e) => mudar(setBusca)(e.target.value)}
             className={`${campoBrutal} flex-1 px-4 py-3 text-sm`}
@@ -86,7 +88,7 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
                 key={chave}
                 onClick={() => mudar(setFiltro)(chave)}
                 aria-pressed={filtro === chave}
-                className={`font-black text-xs uppercase border-4 border-zinc-200 px-3 py-2 cursor-pointer transition-colors ${
+                className={`sombra-glitch font-black text-xs uppercase border-4 border-zinc-200 px-3 py-2 cursor-pointer transition-colors ${
                   filtro === chave ? 'bg-amber-400 text-zinc-950' : 'bg-zinc-950 text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
@@ -98,11 +100,11 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
       </div>
 
       {jogosVisiveis.length === 0 ? (
-        <p className="font-black uppercase text-zinc-400 bg-zinc-950 border-4 border-zinc-700 p-6 text-center">
+        <p role="status" className="font-black uppercase text-zinc-300 bg-zinc-950 border-4 border-zinc-700 p-6 text-center">
           NADA AQUI. NEM SUA BIBLIOTECA TEM ESSE JOGO.
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 md:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 md:gap-8" aria-label={`${jogosVisiveis.length} jogos encontrados`}>
           {jogosVisiveis.slice(0, limite).map((game) => (
             <CartaoJogo
               key={game.appid}
@@ -118,14 +120,14 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
 
       {jogosVisiveis.length > limite && (
         <div className="flex flex-col items-center gap-3 mt-10">
-          <span className="text-xs font-bold text-zinc-400 uppercase">
+          <span className="text-xs font-bold text-zinc-300 uppercase">
             MOSTRANDO {limite} DE {jogosVisiveis.length}
           </span>
           <button
             onClick={() => setLimite(limite + POR_PAGINA)}
-            className={`${botaoBrutal} bg-amber-400 hover:bg-amber-500 text-zinc-950 px-8 py-3`}
+            className={`${botaoBrutal} bg-amber-400 hover:bg-amber-300 text-zinc-950 px-8 py-3 flex items-center gap-2`}
           >
-            CARREGAR MAIS [+{Math.min(POR_PAGINA, jogosVisiveis.length - limite)}]
+            <Icone icone={Plus} caixa={false} cor="escuro" /> CARREGAR MAIS [+{Math.min(POR_PAGINA, jogosVisiveis.length - limite)}]
           </button>
         </div>
       )}

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { conversarComIA } from '../lib/api';
+import { CHAVE_CONVERSA } from '../lib/legal';
 
 const MENSAGEM_INICIAL = 'SISTEMA INICIADO. AQUI É A STEAM_BB. O QUE VOCÊ QUER SABER DA SUA CONTA?';
 const MENSAGEM_RESET = 'SISTEMA RESETADO. MEMÓRIA DA STEAM_BB LIMPA. O QUE VOCÊ QUER AGORA?';
 
 // A conversa fica salva no navegador para não sumir ao recarregar a página
-const CHAVE_CONVERSA = 'steambb-conversa';
 const MAX_MENSAGENS_SALVAS = 50;
 
 const carregarConversa = () => {
@@ -20,9 +20,11 @@ const carregarConversa = () => {
   return [{ role: 'ai', text: MENSAGEM_INICIAL }];
 };
 
+// Só a saudação inicial não é conversa: nesse caso não guarda nada
 const salvarConversa = (mensagens) => {
   try {
-    localStorage.setItem(CHAVE_CONVERSA, JSON.stringify(mensagens.slice(-MAX_MENSAGENS_SALVAS)));
+    if (mensagens.length <= 1) localStorage.removeItem(CHAVE_CONVERSA);
+    else localStorage.setItem(CHAVE_CONVERSA, JSON.stringify(mensagens.slice(-MAX_MENSAGENS_SALVAS)));
   } catch {
     // Sem armazenamento disponível: a conversa só não sobrevive ao recarregar
   }
@@ -96,5 +98,11 @@ export function useChat() {
     setMessages([{ role: 'ai', text: MENSAGEM_RESET }]);
   };
 
-  return { messages, isChatting, enviar, resetar };
+  // Usado pela página Seus dados: volta à conversa inicial (o efeito acima remove o que estava salvo)
+  const apagar = () => {
+    if (ocupadoRef.current) return;
+    setMessages([{ role: 'ai', text: MENSAGEM_INICIAL }]);
+  };
+
+  return { messages, isChatting, enviar, resetar, apagar };
 }

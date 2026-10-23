@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import { Bot } from 'lucide-react';
 import PainelBusca from './components/PainelBusca';
 import BoasVindas from './components/BoasVindas';
 import EsqueletoPerfil from './components/EsqueletoPerfil';
@@ -10,10 +12,18 @@ import ValorDaConta from './components/ValorDaConta';
 import Duelo from './components/Duelo';
 import Biblioteca from './components/Biblioteca';
 import Terminal from './components/Terminal';
+import Rodape from './components/Rodape';
+import AvisoPrivacidade from './components/AvisoPrivacidade';
+import PoliticaPrivacidade from './components/paginas/PoliticaPrivacidade';
+import TermosDeUso from './components/paginas/TermosDeUso';
+import SeusDados from './components/paginas/SeusDados';
 import { getJson, postJson } from './lib/api';
 import { formatarReais, resumirBiblioteca, somarValores } from './lib/biblioteca';
 import { useChat } from './hooks/useChat';
 import { useStatusServidor } from './hooks/useStatusServidor';
+import { useConsentimento } from './hooks/useConsentimento';
+import { useRota } from './hooks/useRota';
+import { estatisticasPermitidas, urlSemPerfil } from './lib/legal';
 
 const LOTE_DE_PRECOS = 50;
 const CALCULO_INICIAL = { estado: 'parado', progresso: 0, falharam: 0 };
@@ -57,7 +67,17 @@ function App() {
   const [erroRival, setErroRival] = useState('');
 
   const statusServidor = useStatusServidor();
-  const { messages, isChatting, enviar, resetar } = useChat();
+  const { messages, isChatting, enviar, resetar, apagar: apagarConversa } = useChat();
+  const consentimento = useConsentimento();
+  const { caminho, navegar } = useRota();
+
+  // Ao abrir uma página legal, guarda o ?id=... do painel para voltar ao mesmo perfil
+  const buscaDoPainelRef = useRef('');
+  const abrirPagina = (destino) => {
+    if (caminho === '/') buscaDoPainelRef.current = window.location.search;
+    navegar(destino);
+  };
+  const voltarAoPainel = () => navegar(`/${buscaDoPainelRef.current}`);
 
   const [aba, setAba] = useState(() => (parametroDaUrl('vs') ? 'duelo' : 'perfil'));
   const abasRef = useRef(null);
@@ -248,85 +268,106 @@ function App() {
     if (window.scrollY > topoDasAbas) window.scrollTo({ top: topoDasAbas });
   };
 
+  const PAGINAS_LEGAIS = {
+    '/privacidade': PoliticaPrivacidade,
+    '/termos': TermosDeUso,
+    '/seus-dados': SeusDados,
+  };
+  const PaginaLegalAtual = PAGINAS_LEGAIS[caminho];
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-mono p-4 md:p-8 selection:bg-lime-400 selection:text-zinc-950">
+    <div className="fundo-grade min-h-screen text-zinc-100 font-mono p-4 md:p-8 selection:bg-lime-400 selection:text-zinc-950">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[70] bg-lime-400 text-zinc-950 font-black px-4 py-2 border-4 border-zinc-200"
+      >
+        Pular para o conteúdo
+      </a>
+
       <div className="max-w-[1800px] mx-auto flex flex-col xl:flex-row gap-8 xl:gap-12 items-start">
 
-        {/* COLUNA ESQUERDA: PERFIL E BIBLIOTECA */}
-        <main className="flex-1 w-full min-w-0 flex flex-col gap-8">
-          <PainelBusca
-            busca={busca}
-            setBusca={setBusca}
-            onBuscar={buscarDados}
-            loading={loading}
-            error={error}
-            statusServidor={statusServidor}
-            compacto={Boolean(profile)}
-          />
-
-          {!profile && loading && <EsqueletoPerfil />}
-
-          {!profile && !loading && (
-            <BoasVindas />
-          )}
-
-          {profile && !temBiblioteca && (
-            <CartaoPerfil profile={profile} totalJogos={games.length} resumo={resumo} />
-          )}
-
-          {temBiblioteca && (
-            <div ref={abasRef} className="flex flex-col gap-8">
-              <Abas
-                abas={abas}
-                ativa={aba}
-                onTrocar={trocarAba}
-                onAbrirTerminal={abrirTerminal}
-                avisoTerminal={temNovidade}
-                digitando={isChatting}
+        {/* COLUNA ESQUERDA: PERFIL E BIBLIOTECA (ou uma página legal) */}
+        <main id="conteudo" tabIndex={-1} className="flex-1 w-full min-w-0 flex flex-col gap-8 focus:outline-none">
+          {PaginaLegalAtual ? (
+            <PaginaLegalAtual
+              onVoltar={voltarAoPainel}
+              onAbrirPagina={abrirPagina}
+              onAbrirPreferencias={consentimento.abrir}
+              onApagarConversa={apagarConversa}
+            />
+          ) : (
+            <>
+              <PainelBusca
+                busca={busca}
+                setBusca={setBusca}
+                onBuscar={buscarDados}
+                loading={loading}
+                error={error}
+                statusServidor={statusServidor}
+                compacto={Boolean(profile)}
               />
 
-              {/* As abas só escondem o conteúdo (hidden), assim cálculos e varreduras não se perdem ao trocar */}
-              <section hidden={aba !== 'perfil'} className="flex flex-col gap-8">
+              {!profile && loading && <EsqueletoPerfil />}
+
+              {!profile && !loading && <BoasVindas />}
+
+              {profile && !temBiblioteca && (
                 <CartaoPerfil profile={profile} totalJogos={games.length} resumo={resumo} />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                  <Recentes recentes={recentes} onGameClick={clicarNoJogo} ocupado={isChatting} />
-                  <QuasePlatinados key={steamId} steamId={steamId} onGameClick={clicarNoJogo} ocupado={isChatting} />
+              )}
+
+              {temBiblioteca && (
+                <div ref={abasRef} className="flex flex-col gap-8">
+                  <Abas
+                    abas={abas}
+                    ativa={aba}
+                    onTrocar={trocarAba}
+                    onAbrirTerminal={abrirTerminal}
+                    avisoTerminal={temNovidade}
+                    digitando={isChatting}
+                  />
+
+                  {/* As abas só escondem o conteúdo (hidden), assim cálculos e varreduras não se perdem ao trocar */}
+                  <section id="painel-perfil" role="tabpanel" aria-labelledby="aba-perfil" hidden={aba !== 'perfil'} className="flex flex-col gap-8">
+                    <CartaoPerfil profile={profile} totalJogos={games.length} resumo={resumo} />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                      <Recentes recentes={recentes} onGameClick={clicarNoJogo} ocupado={isChatting} />
+                      <QuasePlatinados key={steamId} steamId={steamId} onGameClick={clicarNoJogo} ocupado={isChatting} />
+                    </div>
+                  </section>
+
+                  <section id="painel-valor" role="tabpanel" aria-labelledby="aba-valor" hidden={aba !== 'valor'}>
+                    <ValorDaConta calculo={calculo} valores={valores} onCalcular={calcularValor} />
+                  </section>
+
+                  <section id="painel-duelo" role="tabpanel" aria-labelledby="aba-duelo" hidden={aba !== 'duelo'}>
+                    <Duelo
+                      desafiante={{ profile, totalJogos: games.length, resumo }}
+                      rival={rival}
+                      carregando={carregandoRival}
+                      erro={erroRival}
+                      onDesafiar={(texto) => carregarRival(texto)}
+                      onTrocar={trocarRival}
+                      onVeredito={pedirVeredito}
+                      ocupado={isChatting}
+                    />
+                  </section>
+
+                  <section id="painel-biblioteca" role="tabpanel" aria-labelledby="aba-biblioteca" hidden={aba !== 'biblioteca'}>
+                    <Biblioteca
+                      key={steamId}
+                      games={games}
+                      precos={precos}
+                      onGameClick={clicarNoJogo}
+                      ocupado={isChatting}
+                      tempoPrivado={resumo.tempoPrivado}
+                    />
+                  </section>
                 </div>
-              </section>
-
-              <section hidden={aba !== 'valor'}>
-                <ValorDaConta calculo={calculo} valores={valores} onCalcular={calcularValor} />
-              </section>
-
-              <section hidden={aba !== 'duelo'}>
-                <Duelo
-                  desafiante={{ profile, totalJogos: games.length, resumo }}
-                  rival={rival}
-                  carregando={carregandoRival}
-                  erro={erroRival}
-                  onDesafiar={(texto) => carregarRival(texto)}
-                  onTrocar={trocarRival}
-                  onVeredito={pedirVeredito}
-                  ocupado={isChatting}
-                />
-              </section>
-
-              <section hidden={aba !== 'biblioteca'}>
-                <Biblioteca
-                  key={steamId}
-                  games={games}
-                  precos={precos}
-                  onGameClick={clicarNoJogo}
-                  ocupado={isChatting}
-                  tempoPrivado={resumo.tempoPrivado}
-                />
-              </section>
-            </div>
+              )}
+            </>
           )}
 
-          <footer className="text-xs font-bold text-zinc-500 text-center pb-24 xl:pb-0">
-            Criado com sarcasmo, café e código • Dados da Steam Web API • Não afiliado à Valve
-          </footer>
+          <Rodape onAbrirPagina={abrirPagina} onAbrirPreferencias={consentimento.abrir} />
         </main>
 
         {/* COLUNA DIREITA: TERMINAL STEAM_BB */}
@@ -342,15 +383,24 @@ function App() {
       </div>
 
       {/* Botão flutuante só antes de carregar um perfil; depois o terminal abre pela barra de abas */}
-      {!terminalAberto && !temBiblioteca && (
+      {!terminalAberto && !temBiblioteca && !consentimento.aberto && (
         <button
           onClick={abrirTerminal}
-          aria-label="Abrir terminal da SteamBB"
-          className="xl:hidden fixed bottom-4 right-4 z-40 bg-lime-400 text-zinc-950 text-sm font-black uppercase px-3 py-2 border-4 border-zinc-200 shadow-[4px_4px_0px_0px_#e4e4e7] active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center gap-3 cursor-pointer"
+          className="xl:hidden fixed bottom-4 right-4 z-40 bg-lime-400 text-zinc-950 text-sm font-black uppercase px-3 py-2 border-4 border-zinc-200 shadow-[4px_4px_0px_0px_#e4e4e7] active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center gap-2 cursor-pointer"
         >
-          <span className={`w-3 h-3 border-2 border-zinc-950 ${isChatting || temNovidade ? 'bg-zinc-950 animate-pulse' : 'bg-lime-400'}`} />
-          {isChatting ? 'DIGITANDO...' : '▶ IA'}
+          <Bot size={18} strokeWidth={3} aria-hidden="true" className={isChatting || temNovidade ? 'animate-pulse' : ''} />
+          {isChatting ? 'DIGITANDO...' : 'IA'}
+          <span className="sr-only"> (abrir terminal da SteamBB)</span>
         </button>
+      )}
+
+      {consentimento.aberto && (
+        <AvisoPrivacidade onEscolher={consentimento.salvar} onAbrirPagina={abrirPagina} />
+      )}
+
+      {/* Estatísticas só com consentimento, e sem o ?id= (que identifica perfis) na URL enviada */}
+      {consentimento.escolha?.estatisticas && (
+        <Analytics beforeSend={(evento) => (estatisticasPermitidas() ? { ...evento, url: urlSemPerfil(evento.url) } : null)} />
       )}
     </div>
   );
