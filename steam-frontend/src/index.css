@@ -4,3 +4,8 @@ body {
   background-color: #121212;
   color: white;
 }
+
+/* Barra de rolagem brutalista (no Windows a padrão é cinza e destoa do visual) */
+* {
+  scrollbar-color: #a3e635 #09090b;
+}

@@ -6,11 +6,13 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 
 ## ✨ Funcionalidades Principais
 
-* 🔍 **Busca de Perfil Avançada:** Consulta dados em tempo real (avatar, status) utilizando apenas o seu `SteamID64`.
-* 🎮 **Biblioteca Interativa:** Visualização completa dos seus jogos com capas oficiais da Steam CDN, ordenação personalizada (por horas, nome ou ID) e estatísticas de tempo jogado.
-* 💸 **Calculadora de Valor da Conta:** Algoritmo robusto com processamento em lotes e sistema de *Auto-Retry* (anti-bloqueios e proteções contra Rate Limit da Steam) que estima o valor financeiro total da sua biblioteca.
+* 🔍 **Busca de Perfil Flexível:** Aceita o `SteamID64`, o link do perfil (`steamcommunity.com/id/seunome`) ou só o nome personalizado.
+* 🔗 **Link Compartilhável:** Depois da busca, a URL vira `?id=seunome`. Mande para os amigos verem a sua humilhação.
+* 🎮 **Biblioteca Interativa:** Capas oficiais da Steam CDN, busca por nome, filtros (nunca abertos, jogados, +100h), ordenação por horas, nome, ID ou preço e paginação.
+* 📊 **Raio-X do Perfil:** Total de jogos, horas totais, porcentagem de jogos nunca abertos e o seu maior vício.
+* 💸 **Calculadora de Valor da Conta:** Consulta preços em lote na loja da Steam (BR), com cache e *Auto-Retry* contra Rate Limit. Mostra os jogos mais caros e o **dinheiro jogado fora** em jogos que você nunca abriu.
 * 🏆 **Diagnóstico de Conquistas Avançado:** Integração com o *Steam Game Schema* para identificar as conquistas pendentes de cada jogo, processando os nomes reais e as descrições oficiais em português do Brasil.
-* 🤖 **Terminal SteamBB (IA):** Integração com a API do **Groq (modelo GPT-OSS 120B)**. Um assistente sarcástico que lê os seus dados de jogo para te humilhar pessoalmente. A SteamBB vai zombar dos jogos que você comprou e nunca abriu, te ridicularizar pelo valor gasto e te chamar de *tryhard* nos jogos já platinados.
+* 🤖 **Terminal SteamBB (IA):** Integração com a API do **Groq (modelo GPT-OSS 120B)**. Um assistente sarcástico que lê os seus dados de jogo para te humilhar pessoalmente. A SteamBB vai zombar dos jogos que você comprou e nunca abriu, te ridicularizar pelo valor gasto e te chamar de *tryhard* nos jogos já platinados. As respostas aparecem em tempo real (streaming), como num terminal de verdade.
 
 ---
 
@@ -20,12 +22,12 @@ Um painel de controle completo para a Steam, construído com uma estética **Dar
 * **React** (com Vite)
 * **Tailwind CSS** (para o design Neo-Brutalista de alto contraste)
 * **Styled-Components** (para animações de *loading* personalizadas e dinâmicas)
-* **Axios**
 
 ### Back-end
 * **Node.js**
 * **Express**
 * **Axios** (para consumir a Steam Web API e a Steam Storefront API de forma estruturada)
+* **express-rate-limit** (limite de mensagens por IP para proteger a cota do Groq)
 
 ### Inteligência Artificial
 * **Groq API** rodando o modelo **GPT-OSS 120B** na nuvem (rápido e com plano gratuito). O modelo pode ser trocado pela variável `GROQ_MODEL`.
@@ -46,7 +48,15 @@ npm install
 cp .env.example .env   # depois preencha STEAM_API_KEY e GROQ_API_KEY
 npm start              # ou: npm run dev (reinicia ao salvar)
 ```
-O servidor sobe em `http://localhost:3001` (teste em `/api/status`).
+O servidor sobe em `http://localhost:3001` (teste em `/api/status`). Para rodar os testes automatizados: `npm test`.
+
+Variáveis opcionais do backend:
+| Variável | Padrão | Para que serve |
+|---|---|---|
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Modelo da IA no Groq |
+| `CHAT_LIMIT_PER_MINUTE` | `10` | Mensagens por minuto que cada visitante pode mandar para a IA |
+| `FRONTEND_URL` | (vazio = libera tudo) | Endereço do site em produção, para o CORS |
+| `TRUST_PROXY` | `1` | Quantos proxies existem na frente do servidor (o Render usa 1) |
 
 ### 2. Front-end
 ```bash
@@ -80,7 +90,12 @@ O projeto é dividido em duas partes, publicadas separadamente (ambas com plano 
 
 ---
 
+## ✅ Integração Contínua
+A cada push na `main`, o GitHub Actions (`.github/workflows/ci.yml`) roda os testes do backend e o lint e o build do frontend. Se algo quebrar, o erro aparece na aba **Actions** do repositório.
+
+---
+
 ## 🔒 Segurança da Aplicação
-NUNCA suba o seu arquivo `.env` para o GitHub. O `.gitignore` na raiz já bloqueia os arquivos `.env`, e as chaves `STEAM_API_KEY` e `GROQ_API_KEY` ficam apenas no servidor (nunca no front-end). Use os arquivos `.env.example` como modelo.
+NUNCA suba o seu arquivo `.env` para o GitHub. O `.gitignore` na raiz já bloqueia os arquivos `.env`, e as chaves `STEAM_API_KEY` e `GROQ_API_KEY` ficam apenas no servidor (nunca no front-end). Os prompts da IA são montados no servidor e cada visitante tem um limite de mensagens por minuto. Use os arquivos `.env.example` como modelo.
 
 ### Criado com muito sarcasmo, café e código. ###
