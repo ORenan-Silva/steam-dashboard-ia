@@ -6,7 +6,7 @@ const Estatistica = ({ rotulo, valor, detalhe, cor }) => (
   <div className="bg-zinc-950 border-4 border-zinc-200 p-4 flex flex-col gap-1 min-w-0">
     <span className="text-xs font-black text-zinc-400 uppercase">{rotulo}</span>
     <span className={`text-2xl md:text-3xl font-black truncate ${cor}`} title={String(valor)}>{valor}</span>
-    {detalhe && <span className="text-xs font-bold text-zinc-500 uppercase truncate" title={detalhe}>{detalhe}</span>}
+    {detalhe && <span className="text-xs font-bold text-zinc-400 uppercase truncate" title={detalhe}>{detalhe}</span>}
   </div>
 );
 
@@ -26,7 +26,7 @@ const CartaoPerfil = ({ profile, totalJogos, resumo }) => {
   };
 
   return (
-    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#22d3ee] flex flex-col gap-6`}>
+    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#fbbf24] flex flex-col gap-6`}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
         <div className="relative shrink-0">
           <img
@@ -57,7 +57,7 @@ const CartaoPerfil = ({ profile, totalJogos, resumo }) => {
           </a>
           <button
             onClick={copiarLink}
-            className={`${botaoBrutal} bg-pink-400 text-zinc-950 hover:bg-pink-500 px-4 py-2 text-xs flex-1`}
+            className={`${botaoBrutal} bg-lime-400 text-zinc-950 hover:bg-lime-500 px-4 py-2 text-xs flex-1`}
           >
             {copiado ? 'LINK COPIADO!' : 'COMPARTILHAR'}
           </button>
@@ -92,8 +92,8 @@ const CartaoPerfil = ({ profile, totalJogos, resumo }) => {
       </div>
 
       {resumo.tempoPrivado && (
-        <p className="text-xs font-black uppercase text-amber-400 bg-zinc-950 border-4 border-amber-400 p-3">
-          🔒 ESSA CONTA ESCONDE O TEMPO DE JOGO. PARA VER AS HORAS: STEAM &gt; PRIVACIDADE &gt; DESMARCAR "MANTER MEU TEMPO DE JOGO SEMPRE PRIVADO".
+        <p className="text-sm font-bold text-amber-300 bg-zinc-950 border-4 border-amber-400 p-3">
+          🔒 Essa conta esconde o tempo de jogo. Para ver as horas: Steam &gt; Privacidade &gt; desmarque "Manter meu tempo de jogo sempre privado".
         </p>
       )}
     </div>

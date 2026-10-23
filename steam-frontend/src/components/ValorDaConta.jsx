@@ -6,8 +6,8 @@ const ValorDaConta = ({ calculo, valores, onCalcular }) => {
   const { estado, progresso, falharam } = calculo;
 
   return (
-    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#f472b6] flex flex-col gap-6`}>
-      <h3 className="text-2xl md:text-3xl font-black uppercase bg-zinc-200 text-zinc-950 px-6 py-3 shadow-[4px_4px_0px_0px_#f472b6] self-start">
+    <div className={`${cartaoBrutal} shadow-[8px_8px_0px_0px_#22d3ee] flex flex-col gap-6`}>
+      <h3 className="text-2xl md:text-3xl font-black uppercase bg-zinc-200 text-zinc-950 px-6 py-3 shadow-[4px_4px_0px_0px_#22d3ee] self-start">
         $$ VALOR DA CONTA $$
       </h3>
 
@@ -46,8 +46,8 @@ const ValorDaConta = ({ calculo, valores, onCalcular }) => {
               {valores.tempoPrivado ? (
                 <>
                   <span className="text-3xl md:text-4xl font-black">🔒 ???</span>
-                  <span className="text-xs font-black uppercase">
-                    VOCÊ ESCONDE O TEMPO DE JOGO, ENTÃO NÃO DÁ PRA SABER O QUE NUNCA FOI ABERTO. SUSPEITO.
+                  <span className="text-sm font-bold">
+                    Você esconde o tempo de jogo, então não dá pra saber o que nunca foi aberto. Suspeito.
                   </span>
                 </>
               ) : (
@@ -73,10 +73,10 @@ const ValorDaConta = ({ calculo, valores, onCalcular }) => {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-bold text-zinc-500 uppercase">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm font-bold text-zinc-400">
             <span>
-              PREÇO CHEIO ATUAL DA LOJA (BR), NÃO O QUE VOCÊ PAGOU.
-              {falharam > 0 && <span className="text-amber-400"> {falharam} JOGOS SEM PREÇO (A STEAM BLOQUEOU A CONSULTA).</span>}
+              Preço cheio atual da loja (BR), não o que você pagou.
+              {falharam > 0 && <span className="text-amber-300"> {falharam} jogos ficaram sem preço (a Steam bloqueou a consulta).</span>}
             </span>
             <button
               onClick={onCalcular}

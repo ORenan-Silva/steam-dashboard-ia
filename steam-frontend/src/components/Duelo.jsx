@@ -67,8 +67,8 @@ const Duelo = ({ desafiante, rival, carregando, erro, onDesafiar, onTrocar, onVe
 
       {!rival && (
         <>
-          <p className="text-sm font-bold text-zinc-400 uppercase">
-            COLOQUE UM AMIGO NO RINGUE. A STEAM_BB COMPARA AS BIBLIOTECAS E DECIDE QUEM É O PIOR GAMER.
+          <p className="text-sm font-bold text-zinc-300">
+            Coloque um amigo no ringue. A SteamBB compara as bibliotecas e decide quem é o pior gamer.
           </p>
           <form
             onSubmit={(e) => { e.preventDefault(); onDesafiar(busca); }}
@@ -97,7 +97,7 @@ const Duelo = ({ desafiante, rival, carregando, erro, onDesafiar, onTrocar, onVe
       {rival && (
         <>
           <div className="grid grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-4 md:gap-x-4 items-center">
-            <span className="text-xs font-black text-zinc-500 uppercase">VS</span>
+            <span className="text-xs font-black text-zinc-400 uppercase">VS</span>
             <Jogador profile={desafiante.profile} />
             <Jogador profile={rival.profile} />
 
@@ -113,9 +113,9 @@ const Duelo = ({ desafiante, rival, carregando, erro, onDesafiar, onTrocar, onVe
           </div>
 
           {escondem.length > 0 && (
-            <p className="text-xs font-black uppercase text-amber-400 bg-zinc-950 border-4 border-amber-400 p-3">
-              🔒 {escondem.join(' E ')} ESCONDE{escondem.length > 1 ? 'M' : ''} O TEMPO DE JOGO NA STEAM. OS CRITÉRIOS DE HORAS FICAM FORA DO PLACAR.
-              {' '}(STEAM &gt; PRIVACIDADE &gt; DESMARCAR "MANTER MEU TEMPO DE JOGO SEMPRE PRIVADO")
+            <p className="text-sm font-bold text-amber-300 bg-zinc-950 border-4 border-amber-400 p-3">
+              🔒 {escondem.join(' e ')} esconde{escondem.length > 1 ? 'm' : ''} o tempo de jogo na Steam, então os critérios de horas ficam fora do placar.
+              {' '}Para liberar: Steam &gt; Privacidade &gt; desmarque "Manter meu tempo de jogo sempre privado".
             </p>
           )}
 

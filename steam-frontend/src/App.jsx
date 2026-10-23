@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PainelBusca from './components/PainelBusca';
+import BoasVindas from './components/BoasVindas';
+import EsqueletoPerfil from './components/EsqueletoPerfil';
+import Abas from './components/Abas';
 import CartaoPerfil from './components/CartaoPerfil';
 import Recentes from './components/Recentes';
 import QuasePlatinados from './components/QuasePlatinados';
@@ -14,6 +17,9 @@ import { useStatusServidor } from './hooks/useStatusServidor';
 
 const LOTE_DE_PRECOS = 50;
 const CALCULO_INICIAL = { estado: 'parado', progresso: 0, falharam: 0 };
+
+// Perfil do botão "VER UM EXEMPLO" da primeira tela (precisa ser público, com os detalhes de jogo públicos)
+const PERFIL_EXEMPLO = import.meta.env.VITE_PERFIL_EXEMPLO || 'arcticeaagle';
 
 // Link compartilhável: usa o nome personalizado do perfil quando existe, senão o SteamID64
 const idParaLink = (perfil) => perfil.profileurl?.match(/\/id\/([^/]+)/)?.[1] || perfil.steamid;
@@ -56,6 +62,9 @@ function App() {
   const statusServidor = useStatusServidor();
   const { messages, isChatting, enviar, resetar } = useChat();
 
+  const [aba, setAba] = useState(() => (parametroDaUrl('vs') ? 'duelo' : 'perfil'));
+  const abasRef = useRef(null);
+
   const [terminalAberto, setTerminalAberto] = useState(false);
   const [mensagensVistas, setMensagensVistas] = useState(() => messages.length);
 
@@ -79,6 +88,7 @@ function App() {
     setCalculo(CALCULO_INICIAL);
     setRival(null);
     setErroRival('');
+    setAba('perfil');
     carregarPerfil(texto);
   };
 
@@ -92,7 +102,8 @@ function App() {
       setSteamId(dados.steamId);
       setProfile(dados.profile);
       setGames(dados.games);
-      atualizarUrl(dados.profile);
+      // Com rival no link, o ?vs= continua na URL até o duelo terminar de carregar
+      if (!textoRival) atualizarUrl(dados.profile);
 
       // Perfil público com biblioteca privada: a Steam responde sem a lista de jogos
       if (dados.games.length === 0) {
@@ -226,8 +237,22 @@ function App() {
 
   const temBiblioteca = profile && games.length > 0;
 
+  const abas = [
+    { id: 'perfil', rotulo: 'PERFIL' },
+    { id: 'valor', rotulo: 'VALOR' },
+    { id: 'duelo', rotulo: 'DUELO' },
+    { id: 'biblioteca', rotulo: 'JOGOS', contador: games.length },
+  ];
+
+  // Ao trocar de aba lá embaixo na página, volta para o topo da barra de abas
+  const trocarAba = (id) => {
+    setAba(id);
+    const topoDasAbas = abasRef.current?.offsetTop ?? 0;
+    if (window.scrollY > topoDasAbas) window.scrollTo({ top: topoDasAbas });
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-mono p-4 md:p-8 selection:bg-fuchsia-500 selection:text-white">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-mono p-4 md:p-8 selection:bg-lime-400 selection:text-zinc-950">
       <div className="max-w-[1800px] mx-auto flex flex-col xl:flex-row gap-8 xl:gap-12 items-start">
 
         {/* COLUNA ESQUERDA: PERFIL E BIBLIOTECA */}
@@ -239,48 +264,70 @@ function App() {
             loading={loading}
             error={error}
             statusServidor={statusServidor}
+            compacto={Boolean(profile)}
           />
 
-          {profile && (
+          {!profile && loading && <EsqueletoPerfil />}
+
+          {!profile && !loading && (
+            <BoasVindas onExemplo={() => { setBusca(PERFIL_EXEMPLO); buscarDados(PERFIL_EXEMPLO); }} carregando={loading} />
+          )}
+
+          {profile && !temBiblioteca && (
             <CartaoPerfil profile={profile} totalJogos={games.length} resumo={resumo} />
           )}
 
           {temBiblioteca && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              <Recentes recentes={recentes} onGameClick={clicarNoJogo} ocupado={isChatting} />
-              <QuasePlatinados key={steamId} steamId={steamId} onGameClick={clicarNoJogo} ocupado={isChatting} />
+            <div ref={abasRef} className="flex flex-col gap-8">
+              <Abas
+                abas={abas}
+                ativa={aba}
+                onTrocar={trocarAba}
+                onAbrirTerminal={abrirTerminal}
+                avisoTerminal={temNovidade}
+                digitando={isChatting}
+              />
+
+              {/* As abas só escondem o conteúdo (hidden), assim cálculos e varreduras não se perdem ao trocar */}
+              <section hidden={aba !== 'perfil'} className="flex flex-col gap-8">
+                <CartaoPerfil profile={profile} totalJogos={games.length} resumo={resumo} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                  <Recentes recentes={recentes} onGameClick={clicarNoJogo} ocupado={isChatting} />
+                  <QuasePlatinados key={steamId} steamId={steamId} onGameClick={clicarNoJogo} ocupado={isChatting} />
+                </div>
+              </section>
+
+              <section hidden={aba !== 'valor'}>
+                <ValorDaConta calculo={calculo} valores={valores} onCalcular={calcularValor} />
+              </section>
+
+              <section hidden={aba !== 'duelo'}>
+                <Duelo
+                  desafiante={{ profile, totalJogos: games.length, resumo }}
+                  rival={rival}
+                  carregando={carregandoRival}
+                  erro={erroRival}
+                  onDesafiar={(texto) => carregarRival(texto)}
+                  onTrocar={trocarRival}
+                  onVeredito={pedirVeredito}
+                  ocupado={isChatting}
+                />
+              </section>
+
+              <section hidden={aba !== 'biblioteca'}>
+                <Biblioteca
+                  key={steamId}
+                  games={games}
+                  precos={precos}
+                  onGameClick={clicarNoJogo}
+                  ocupado={isChatting}
+                  tempoPrivado={resumo.tempoPrivado}
+                />
+              </section>
             </div>
           )}
 
-          {temBiblioteca && (
-            <ValorDaConta calculo={calculo} valores={valores} onCalcular={calcularValor} />
-          )}
-
-          {temBiblioteca && (
-            <Duelo
-              desafiante={{ profile, totalJogos: games.length, resumo }}
-              rival={rival}
-              carregando={carregandoRival}
-              erro={erroRival}
-              onDesafiar={(texto) => carregarRival(texto)}
-              onTrocar={trocarRival}
-              onVeredito={pedirVeredito}
-              ocupado={isChatting}
-            />
-          )}
-
-          {games.length > 0 && (
-            <Biblioteca
-              key={steamId}
-              games={games}
-              precos={precos}
-              onGameClick={clicarNoJogo}
-              ocupado={isChatting}
-              tempoPrivado={resumo.tempoPrivado}
-            />
-          )}
-
-          <footer className="text-xs font-bold text-zinc-600 uppercase text-center pb-20 xl:pb-0">
+          <footer className="text-xs font-bold text-zinc-500 text-center pb-24 xl:pb-0">
             Criado com sarcasmo, café e código • Dados da Steam Web API • Não afiliado à Valve
           </footer>
         </main>
@@ -297,13 +344,15 @@ function App() {
         />
       </div>
 
-      {!terminalAberto && (
+      {/* Botão flutuante só antes de carregar um perfil; depois o terminal abre pela barra de abas */}
+      {!terminalAberto && !temBiblioteca && (
         <button
           onClick={abrirTerminal}
-          className="xl:hidden fixed bottom-4 right-4 z-40 bg-fuchsia-500 text-white text-sm font-black uppercase px-4 py-3 border-4 border-zinc-200 shadow-[4px_4px_0px_0px_#e4e4e7] active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center gap-3 cursor-pointer"
+          aria-label="Abrir terminal da SteamBB"
+          className="xl:hidden fixed bottom-4 right-4 z-40 bg-lime-400 text-zinc-950 text-sm font-black uppercase px-3 py-2 border-4 border-zinc-200 shadow-[4px_4px_0px_0px_#e4e4e7] active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center gap-3 cursor-pointer"
         >
-          <span className={`w-3 h-3 border-2 border-zinc-950 ${isChatting || temNovidade ? 'bg-lime-400 animate-pulse' : 'bg-zinc-950'}`} />
-          {isChatting ? 'STEAM_BB DIGITANDO...' : '▶ STEAM_BB'}
+          <span className={`w-3 h-3 border-2 border-zinc-950 ${isChatting || temNovidade ? 'bg-zinc-950 animate-pulse' : 'bg-lime-400'}`} />
+          {isChatting ? 'DIGITANDO...' : '▶ IA'}
         </button>
       )}
     </div>

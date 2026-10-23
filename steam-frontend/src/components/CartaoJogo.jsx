@@ -10,7 +10,7 @@ const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado }) => {
       type="button"
       onClick={() => onClick(game)}
       title={ocupado ? 'Espere a SteamBB terminar de falar' : `Perguntar à SteamBB sobre ${game.name}`}
-      className={`group text-left bg-zinc-900 border-4 border-zinc-200 shadow-[6px_6px_0px_0px_#fbbf24] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_#fbbf24] focus-visible:outline-4 focus-visible:outline-fuchsia-500 transition-all flex flex-col ${ocupado ? 'cursor-wait' : 'cursor-pointer'}`}
+      className={`group text-left bg-zinc-900 border-4 border-zinc-200 shadow-[6px_6px_0px_0px_#fbbf24] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_#fbbf24] focus-visible:outline-4 focus-visible:outline-lime-400 transition-all flex flex-col ${ocupado ? 'cursor-wait' : 'cursor-pointer'}`}
     >
       <div className="relative bg-zinc-950 aspect-[460/215] w-full border-b-4 border-zinc-200 overflow-hidden">
         <img
@@ -35,7 +35,7 @@ const CartaoJogo = ({ game, preco, onClick, ocupado, tempoPrivado }) => {
               {preco.cheio > 0 ? formatarReais(preco.cheio) : 'GRÁTIS'}
             </span>
           ) : (
-            <span className="text-zinc-500 font-mono">#{game.appid}</span>
+            <span className="text-zinc-400 font-mono">#{game.appid}</span>
           )}
         </div>
       </div>

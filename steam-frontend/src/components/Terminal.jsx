@@ -12,7 +12,7 @@ const Mensagem = ({ msg, digitando }) => (
     <div
       className={`p-4 max-w-[85%] border-4 text-base font-bold shadow-[4px_4px_0px_0px_#e4e4e7] ${
         msg.role === 'user'
-          ? 'bg-pink-400 text-zinc-950 border-zinc-200'
+          ? 'bg-zinc-200 text-zinc-950 border-zinc-200'
           : msg.erro
             ? 'bg-zinc-950 text-red-400 border-red-500'
             : 'bg-zinc-800 text-zinc-100 border-zinc-200'
@@ -50,11 +50,11 @@ const Terminal = ({ messages, isChatting, onEnviar, onReset, aberto, onFechar, t
 
   return (
     <div
-      className={`${aberto ? 'fixed inset-0 z-50 flex' : 'hidden'} xl:flex xl:sticky xl:inset-auto xl:z-auto xl:top-8 w-full xl:w-[450px] shrink-0 h-dvh xl:h-[calc(100vh-4rem)] xl:min-h-[600px] flex-col bg-zinc-900 border-4 border-zinc-200 xl:shadow-[12px_12px_0px_0px_#f472b6]`}
+      className={`${aberto ? 'fixed inset-0 z-50 flex' : 'hidden'} xl:flex xl:sticky xl:inset-auto xl:z-auto xl:top-8 w-full xl:w-[450px] shrink-0 h-dvh xl:h-[calc(100vh-4rem)] xl:min-h-[600px] flex-col bg-zinc-900 border-4 border-zinc-200 xl:shadow-[12px_12px_0px_0px_#a3e635]`}
     >
       <div className="bg-zinc-200 text-zinc-950 p-4 flex justify-between items-center shrink-0">
         <h3 className="font-black text-base sm:text-xl uppercase tracking-wider sm:tracking-widest flex items-center gap-3 whitespace-nowrap">
-          <span className="w-4 h-4 shrink-0 bg-fuchsia-500 border-2 border-zinc-950 animate-pulse"></span>
+          <span className="w-4 h-4 shrink-0 bg-lime-400 border-2 border-zinc-950 animate-pulse"></span>
           TERMINAL STEAM_BB
         </h3>
         <div className="flex gap-2 items-center whitespace-nowrap">

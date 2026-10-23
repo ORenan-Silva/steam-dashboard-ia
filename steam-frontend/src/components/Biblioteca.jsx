@@ -87,7 +87,7 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
                 onClick={() => mudar(setFiltro)(chave)}
                 aria-pressed={filtro === chave}
                 className={`font-black text-xs uppercase border-4 border-zinc-200 px-3 py-2 cursor-pointer transition-colors ${
-                  filtro === chave ? 'bg-fuchsia-500 text-white' : 'bg-zinc-950 text-zinc-300 hover:bg-zinc-800'
+                  filtro === chave ? 'bg-amber-400 text-zinc-950' : 'bg-zinc-950 text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
                 {rotulo}
@@ -118,7 +118,7 @@ const Biblioteca = ({ games, precos, onGameClick, ocupado, tempoPrivado }) => {
 
       {jogosVisiveis.length > limite && (
         <div className="flex flex-col items-center gap-3 mt-10">
-          <span className="text-xs font-bold text-zinc-500 uppercase">
+          <span className="text-xs font-bold text-zinc-400 uppercase">
             MOSTRANDO {limite} DE {jogosVisiveis.length}
           </span>
           <button

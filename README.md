@@ -72,7 +72,7 @@ npm install
 npm run dev
 npm test        # testes com Vitest
 ```
-Por padrão o front conversa com `http://localhost:3001`. Para apontar para outro backend, crie um `.env.local` com `VITE_API_URL=...` (veja `.env.example`).
+Por padrão o front conversa com `http://localhost:3001`. Para apontar para outro backend, crie um `.env.local` com `VITE_API_URL=...` (veja `.env.example`). O botão **VER UM EXEMPLO** da primeira tela carrega o perfil definido em `VITE_PERFIL_EXEMPLO` (padrão: `arcticeaagle`).
 
 ---
 
